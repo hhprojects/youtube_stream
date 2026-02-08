@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { exec } = require('child_process');
@@ -5,10 +8,10 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.BACKEND_PORT || 3001;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
-const SERVER_URL = '192.168.1.11:3001'; // Pi's IP address
-const DOWNLOAD_DIR = path.join(__dirname, 'downloads');
+const SERVER_URL = process.env.SERVER_URL || '192.168.1.11:3001'; // Pi's IP address
+const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || path.join(__dirname, 'downloads');
 
 // Ensure downloads directory exists
 if (!fs.existsSync(DOWNLOAD_DIR)) {
