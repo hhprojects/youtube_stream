@@ -40,14 +40,16 @@ youtube_stream/
 
 ## Tech Stack
 
-- **Frontend**: React Native 0.76.9
-- **Navigation**: React Navigation 7.x (Bottom Tabs)
+- **Frontend**: React Native 0.74.7 (compatible with Node.js >= 18)
+- **Navigation**: React Navigation 6.x (Bottom Tabs)
 - **Backend**: Node.js + Express 4.21.0
 - **YouTube API**: yt-dlp 2025.04.30
 - **State Management**: React hooks (useState)
-- **Audio Playback**: expo-av 16.0.8
-- **Icons**: React Native Vector Icons 10.2.0
+- **Audio Playback**: expo-av 14.0.0
+- **Icons**: React Native Vector Icons 10.0.0
 - **HTTP Client**: Axios 1.8.0
+
+**Note**: React Native 0.74.7 works with Node.js 20.12.2 without engine warnings. See `NODE_VERSION_FIX.md` for details.
 
 ## Setup Instructions
 
@@ -59,7 +61,7 @@ youtube_stream/
    npm install
    ```
 
-   **Note**: Requires Node.js >= 20.19.4
+   **Note**: Requires Node.js >= 18 (tested with Node.js 20.12.2)
 
 2. **Install yt-dlp** (YouTube downloader)
    ```bash
