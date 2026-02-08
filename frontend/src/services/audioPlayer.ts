@@ -1,4 +1,4 @@
-import { Audio } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer as ExpoAudioPlayer } from 'expo-audio';
 
 export type PlaybackStatus = {
   isPlaying: boolean;
@@ -9,7 +9,7 @@ export type PlaybackStatus = {
 };
 
 class AudioPlayer {
-  private player: Audio.AudioPlayer | null = null;
+  private player: ExpoAudioPlayer | null = null;
   private listeners: Array<(status: PlaybackStatus) => void> = [];
   private currentUrl: string | null = null;
   private playbackStatus: PlaybackStatus = {
@@ -19,7 +19,7 @@ class AudioPlayer {
     durationMillis: 0,
     didJustFinish: false,
   };
-  private statusUpdateSubscription: any = null;
+  private statusUpdateInterval: NodeJS.Timeout | null = null;
 
   async load(url: string): Promise<void> {
     if (this.player) {
@@ -27,18 +27,15 @@ class AudioPlayer {
     }
 
     try {
-      // Create audio source
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: url },
-        {
-          shouldPlay: false,
-          progressUpdateIntervalMillis: 1000,
-        },
-        this.onPlaybackStatusUpdate
-      );
+      // Create audio player with source
+      this.player = createAudioPlayer(url, {
+        updateInterval: 1000,
+      });
 
-      this.player = sound;
       this.currentUrl = url;
+
+      // Start polling for playback status updates
+      this.startPlaybackStatusPolling();
     } catch (error) {
       console.error('Failed to load audio:', error);
       throw error;
@@ -64,8 +61,8 @@ class AudioPlayer {
     if (!this.player) return;
 
     try {
-      const status = await this.player.getStatusAsync();
-      if (status.isLoaded && status.isPlaying) {
+      const status = this.player.getStatus();
+      if (status.playing) {
         await this.player.pauseAsync();
         this.playbackStatus.isPlaying = false;
         this.notifyListeners();
@@ -79,10 +76,9 @@ class AudioPlayer {
     if (!this.player) return;
 
     try {
-      const status = await this.player.getStatusAsync();
-      if (status.isLoaded && status.isPlaying) {
+      const status = this.player.getStatus();
+      if (status.playing) {
         await this.player.stopAsync();
-        await this.player.setPositionAsync(0);
         this.playbackStatus.isPlaying = false;
         this.playbackStatus.positionMillis = 0;
         this.notifyListeners();
@@ -96,7 +92,9 @@ class AudioPlayer {
     if (!this.player) return;
 
     try {
-      await this.player.setPositionAsync(positionMillis);
+      // expo-audio uses seconds, not milliseconds
+      const positionSeconds = positionMillis / 1000;
+      await this.player.seekTo(positionSeconds);
       this.playbackStatus.positionMillis = positionMillis;
       this.notifyListeners();
     } catch (error) {
@@ -107,28 +105,46 @@ class AudioPlayer {
   async unload(): Promise<void> {
     if (this.player) {
       try {
-        await this.player.unloadAsync();
+        await this.player.stopAsync();
+        this.player.release();
         this.player = null;
         this.currentUrl = null;
+        this.stopPlaybackStatusPolling();
       } catch (error) {
         console.error('Failed to unload audio:', error);
       }
     }
   }
 
-  onPlaybackStatusUpdate = (status: any): void => {
-    if (!status.isLoaded) return;
+  private startPlaybackStatusPolling() {
+    this.stopPlaybackStatusPolling();
+    this.playbackStatusUpdateInterval = setInterval(() => {
+      if (this.player) {
+        try {
+          const status = this.player.getStatus();
 
-    this.playbackStatus = {
-      isPlaying: status.isPlaying ?? false,
-      isBuffering: status.isBuffering ?? false,
-      positionMillis: status.positionMillis ?? 0,
-      durationMillis: status.durationMillis ?? 0,
-      didJustFinish: status.didJustFinish ?? false,
-    };
+          this.playbackStatus = {
+            isPlaying: status.playing,
+            isBuffering: status.buffering || false,
+            positionMillis: status.currentTime * 1000, // Convert seconds to milliseconds
+            durationMillis: status.duration ? status.duration * 1000 : 0, // Convert seconds to milliseconds
+            didJustFinish: false, // expo-audio doesn't have didJustFinish
+          };
 
-    this.notifyListeners();
-  };
+          this.notifyListeners();
+        } catch (error) {
+          console.error('Error polling playback status:', error);
+        }
+      }
+    }, 1000);
+  }
+
+  private stopPlaybackStatusPolling() {
+    if (this.playbackStatusUpdateInterval) {
+      clearInterval(this.playbackStatusUpdateInterval);
+      this.playbackStatusUpdateInterval = null;
+    }
+  }
 
   addListener(listener: (status: PlaybackStatus) => void): void {
     this.listeners.push(listener);
@@ -152,7 +168,7 @@ export const audioPlayer = new AudioPlayer();
 // Setup audio mode
 export const setupAudio = async (): Promise<void> => {
   try {
-    await Audio.setAudioModeAsync({
+    await setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
       shouldDuckAndroid: true,
