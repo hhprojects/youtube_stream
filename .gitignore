@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# React Native
+.expo/
+.expo-shared/
+
+# Build
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.orig
+*~
+
+# Project-specific
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
