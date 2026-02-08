@@ -63,6 +63,8 @@ youtube_stream/
 
    **Note**: Requires Node.js >= 18 (tested with Node.js 20.12.2)
 
+   **⚠️ Windows Users**: If you see engine warnings, you may need to upgrade Node.js. See `QUICK_UPGRADE.md` for fast guide or `UPGRADE_NODE_WINDOWS.md` for detailed instructions.
+
 2. **Install yt-dlp** (YouTube downloader)
    ```bash
    sudo apt install -y yt-dlp
