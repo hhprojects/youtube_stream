@@ -12,25 +12,25 @@
     "ios": "react-native run-ios",
     "backend": "node backend/server.js"
   },
-  "overrides": {
-    "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@^7.25.9",
-    "@babel/plugin-proposal-nullish-coalescing-operator": "npm:@babel/plugin-transform-nullish-coalescing-operator@^7.25.9",
-    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@^7.25.9"
-  },
   "dependencies": {
-    "@react-navigation/bottom-tabs": "^7.12.0",
-    "@react-navigation/native": "^7.1.28",
+    "@react-navigation/bottom-tabs": "^6.5.0",
+    "@react-navigation/native": "^6.1.0",
     "axios": "^1.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "expo-av": "^16.0.8",
-    "expo-secure-store": "^15.0.8",
+    "expo-av": "^14.0.0",
+    "expo-secure-store": "^12.0.0",
     "express": "^4.21.0",
     "react": "18.3.1",
     "react-native": "0.83.1",
     "react-native-safe-area-context": "^4.14.0",
-    "react-native-screens": "^4.5.0",
+    "react-native-screens": "^3.31.0",
     "react-native-vector-icons": "^10.2.0"
+  },
+  "overrides": {
+    "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@^7.25.9",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "npm:@babel/plugin-transform-nullish-coalescing-operator@^7.25.9",
+    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@^7.25.9"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
