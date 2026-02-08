@@ -12,6 +12,11 @@
     "ios": "react-native run-ios",
     "backend": "node backend/server.js"
   },
+  "overrides": {
+    "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@^7.25.9",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "npm:@babel/plugin-transform-nullish-coalescing-operator@^7.25.9",
+    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@^7.25.9"
+  },
   "dependencies": {
     "@react-navigation/bottom-tabs": "^7.12.0",
     "@react-navigation/native": "^7.1.28",
