@@ -6,6 +6,8 @@ const fs = require('fs');
 
 const app = express();
 const PORT = 3001;
+const HOST = '0.0.0.0'; // Listen on all network interfaces
+const SERVER_URL = '192.168.1.11:3001'; // Pi's IP address
 const DOWNLOAD_DIR = path.join(__dirname, 'downloads');
 
 // Ensure downloads directory exists
@@ -82,7 +84,7 @@ app.post('/api/download', async (req, res) => {
       res.json({
         success: true,
         filename: `${safeTitle}.m4a`,
-        path: `http://localhost:${PORT}/downloads/${safeTitle}.m4a`,
+        path: `http://${SERVER_URL}/downloads/${safeTitle}.m4a`,
         title: title,
         size: stats.size
       });
@@ -106,7 +108,7 @@ app.get('/api/library', (req, res) => {
           title: file.replace(/\.(m4a|mp3)$/, '').replace(/_/g, ' '),
           artist: 'Unknown',
           duration: 'Unknown',
-          path: `http://localhost:${PORT}/downloads/${file}`,
+          path: `http://${SERVER_URL}/downloads/${file}`,
           size: stats.size,
           dateAdded: stats.mtime
         };
@@ -138,7 +140,8 @@ app.delete('/api/library/:filename', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
+  console.log(`Server accessible at http://${SERVER_URL}`);
   console.log(`Downloads directory: ${DOWNLOAD_DIR}`);
 });
