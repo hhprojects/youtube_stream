@@ -9,7 +9,7 @@ export type PlaybackStatus = {
 };
 
 class AudioPlayer {
-  private player: Audio.Audio | null = null;
+  private player: Audio.AudioPlayer | null = null;
   private listeners: Array<(status: PlaybackStatus) => void> = [];
   private currentUrl: string | null = null;
   private playbackStatus: PlaybackStatus = {
@@ -19,7 +19,7 @@ class AudioPlayer {
     durationMillis: 0,
     didJustFinish: false,
   };
-  private playbackStatusUpdateInterval: NodeJS.Timeout | null = null;
+  private statusUpdateSubscription: any = null;
 
   async load(url: string): Promise<void> {
     if (this.player) {
@@ -27,18 +27,18 @@ class AudioPlayer {
     }
 
     try {
-      const player = new Audio.Audio();
+      // Create audio source
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: url },
+        {
+          shouldPlay: false,
+          progressUpdateIntervalMillis: 1000,
+        },
+        this.onPlaybackStatusUpdate
+      );
 
-      await player.loadAsync({ uri: url });
-
-      // Set up status update listener
-      player.setOnPlaybackStatusUpdate(this.onPlaybackStatusUpdate);
-
-      this.player = player;
+      this.player = sound;
       this.currentUrl = url;
-
-      // Start polling for playback status updates
-      this.startPlaybackStatusPolling();
     } catch (error) {
       console.error('Failed to load audio:', error);
       throw error;
@@ -65,7 +65,7 @@ class AudioPlayer {
 
     try {
       const status = await this.player.getStatusAsync();
-      if (status.isPlaying) {
+      if (status.isLoaded && status.isPlaying) {
         await this.player.pauseAsync();
         this.playbackStatus.isPlaying = false;
         this.notifyListeners();
@@ -80,7 +80,7 @@ class AudioPlayer {
 
     try {
       const status = await this.player.getStatusAsync();
-      if (status.isPlaying || status.isLoaded) {
+      if (status.isLoaded && status.isPlaying) {
         await this.player.stopAsync();
         await this.player.setPositionAsync(0);
         this.playbackStatus.isPlaying = false;
@@ -110,46 +110,14 @@ class AudioPlayer {
         await this.player.unloadAsync();
         this.player = null;
         this.currentUrl = null;
-        this.stopPlaybackStatusPolling();
       } catch (error) {
         console.error('Failed to unload audio:', error);
       }
     }
   }
 
-  private startPlaybackStatusPolling() {
-    this.stopPlaybackStatusPolling();
-    this.playbackStatusUpdateInterval = setInterval(async () => {
-      if (this.player) {
-        try {
-          const status = await this.player.getStatusAsync();
-          this.playbackStatus = {
-            isPlaying: status.isPlaying,
-            isBuffering: status.isBuffering || false,
-            positionMillis: status.positionMillis || 0,
-            durationMillis: status.durationMillis || 0,
-            didJustFinish: status.didJustFinish || false,
-          };
-
-          if (status.didJustFinish) {
-            this.notifyListeners();
-          }
-        } catch (error) {
-          console.error('Error polling playback status:', error);
-        }
-      }
-    }, 1000);
-  }
-
-  private stopPlaybackStatusPolling() {
-    if (this.playbackStatusUpdateInterval) {
-      clearInterval(this.playbackStatusUpdateInterval);
-      this.playbackStatusUpdateInterval = null;
-    }
-  }
-
   onPlaybackStatusUpdate = (status: any): void => {
-    if (!status) return;
+    if (!status.isLoaded) return;
 
     this.playbackStatus = {
       isPlaying: status.isPlaying ?? false,
