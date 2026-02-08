@@ -1,9 +1,9 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SearchScreen } from './screens/SearchScreen';
-import { LibraryScreen } from './screens/LibraryScreen';
-import { PlayerScreen } from './screens/PlayerScreen';
+import SearchScreen from './screens/SearchScreen';
+import LibraryScreen from './screens/LibraryScreen';
+import PlayerScreen from './screens/PlayerScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const Tab = createBottomTabNavigator();
@@ -12,7 +12,7 @@ const tabNavigator = () => (
   <Tab.Navigator
     screenOptions={({ route }) => ({
       tabBarIcon: ({ focused, color, size }) => {
-        let iconName;
+        let iconName: any;
         if (route.name === 'Search') {
           iconName = focused ? 'search' : 'search-outline';
         } else if (route.name === 'Library') {
@@ -22,6 +22,8 @@ const tabNavigator = () => (
         }
         return <Ionicons name={iconName} size={size} color={color} />;
       },
+      tabBarActiveTintColor: '#FF0000',
+      tabBarInactiveTintColor: '#999',
     })}
   >
     <Tab.Screen name="Search" component={SearchScreen} />

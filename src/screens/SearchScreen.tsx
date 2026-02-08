@@ -1,59 +1,131 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+  Image,
+} from 'react-native';
 import { StyleSheet } from 'react-native';
+import { searchVideos, downloadAudio } from '../services/api';
+import { SearchResult } from '../types';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
-export default function SearchScreen({ navigation }) {
+export default function SearchScreen({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [results, setResults] = useState<SearchResult[]>([]);
 
   const handleSearch = async () => {
     if (!query.trim()) return;
-    
+
     setLoading(true);
-    // TODO: Call YouTube API / yt-dlp service to search
-    // This will be implemented in a separate backend service
-    
-    // Placeholder for now
-    setTimeout(() => {
-      setResults([
-        { id: '1', title: `${query} - Official Video`, channel: 'OfficialArtist' },
-        { id: '2', title: `${query} - Cover`, channel: 'CoverArtist' },
-      ]);
+    try {
+      const videos = await searchVideos(query);
+      setResults(videos);
+    } catch (error) {
+      console.error('Search error:', error);
+      Alert.alert('Error', 'Failed to search. Please try again.');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
+
+  const handleDownload = async (video: SearchResult) => {
+    setDownloading(video.id);
+    try {
+      const song = await downloadAudio(video.id, video.title);
+      Alert.alert(
+        'Success',
+        `"${video.title}" downloaded successfully!`,
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('Library'),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Download error:', error);
+      Alert.alert('Error', 'Failed to download. Please try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const renderItem = ({ item }: { item: SearchResult }) => (
+    <TouchableOpacity
+      style={styles.item}
+      onPress={() => navigation.navigate('Player', { video: item })}
+    >
+      <Image
+        source={{ uri: item.thumbnail || 'https://via.placeholder.com/120' }}
+        style={styles.thumbnail}
+      />
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.itemChannel}>{item.channel}</Text>
+        {item.duration && (
+          <Text style={styles.itemDuration}>{Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}</Text>
+        )}
+      </View>
+      <TouchableOpacity
+        style={styles.downloadButton}
+        onPress={() => handleDownload(item)}
+        disabled={downloading === item.id}
+      >
+        {downloading === item.id ? (
+          <ActivityIndicator size="small" color="#FF0000" />
+        ) : (
+          <Ionicons name="download-outline" size={24} color="#FF0000" />
+        )}
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Search YouTube</Text>
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Search videos or music..."
-        value={query}
-        onChangeText={setQuery}
-        onSubmitEditing={handleSearch}
-        autoCapitalize="none"
-      />
-      
-      {loading ? (
-        <ActivityIndicator size="large" color="#FF0000" />
-      ) : (
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.item}
-              onPress={() => navigation.navigate('Player', { video: item })}
-            >
-              <Text style={styles.itemTitle}>{item.title}</Text>
-              <Text style={styles.itemChannel}>{item.channel}</Text>
-            </TouchableOpacity>
-          )}
+
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Search videos or music..."
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={handleSearch}
+          autoCapitalize="none"
         />
-      )}
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={handleSearch}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="search" size={24} color="#fff" />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={results}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>
+              Search for your favorite music
+            </Text>
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -70,27 +142,70 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
   input: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
     padding: 15,
     fontSize: 16,
-    marginBottom: 20,
+    marginRight: 10,
+  },
+  searchButton: {
+    backgroundColor: '#FF0000',
+    borderRadius: 8,
+    padding: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   item: {
-    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
     backgroundColor: '#f5f5f5',
     marginBottom: 10,
     borderRadius: 8,
   },
+  thumbnail: {
+    width: 80,
+    height: 45,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  itemContent: {
+    flex: 1,
+  },
   itemTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 2,
   },
   itemChannel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
+    marginBottom: 2,
+  },
+  itemDuration: {
+    fontSize: 12,
+    color: '#999',
+  },
+  downloadButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    marginTop: 10,
   },
 });

@@ -1,85 +1,167 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import Audio from 'react-native-voice'; // Note: This will need to be installed
+import { useMusicPlayer } from '../hooks/useMusicPlayer';
+import { SearchResult, Song } from '../types';
 
-export default function PlayerScreen({ route, navigation }) {
-  const video = route.params?.video || route.params?.song;
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLooping, setIsLooping] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
+export default function PlayerScreen({ route, navigation }: any) {
+  const video: SearchResult | Song = route.params?.video || route.params?.song;
+  const { playerState, togglePlayPause, playNext, playPrevious, seek, toggleLoop, toggleShuffle } = useMusicPlayer();
+  
+  const [sliderValue, setSliderValue] = useState(0);
+  const [seeking, setSeeking] = useState(false);
 
-  const togglePlayPause = () => {
-    if (isPlaying) {
-      Audio.stop();
-      setIsPlaying(false);
-    } else {
-      // TODO: Implement play logic using react-native-voice or expo-av
-      setIsPlaying(true);
+  useEffect(() => {
+    if (!seeking) {
+      setSliderValue(playerState.position);
     }
+  }, [playerState.position, seeking]);
+
+  const handleSliderChange = (value: number) => {
+    setSliderValue(value);
+    setSeeking(true);
   };
 
-  const handleNext = () => {
-    // TODO: Play next item in queue
-    console.log('Next');
+  const handleSliderComplete = async (value: number) => {
+    await seek(value);
+    setSeeking(false);
   };
 
-  const handlePrevious = () => {
-    // TODO: Play previous item in queue
-    console.log('Previous');
+  const formatTime = (millis: number): string => {
+    const totalSeconds = Math.floor(millis / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const toggleLoop = () => {
-    setIsLooping(!isLooping);
-    console.log('Loop:', !isLooping);
-  };
-
-  const toggleShuffle = () => {
-    setShuffle(!shuffle);
-    console.log('Shuffle:', !shuffle);
-  };
-
-  const handleQueue = () => {
-    navigation.navigate('Library');
-  };
+  const currentTrack = video || playerState.currentSong;
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>{video?.title || 'No track selected'}</Text>
-      
-      <View style={styles.playerControls}>
-        <TouchableOpacity style={styles.controlButton} onPress={handlePrevious}>
-          <Ionicons name="play-skip-back" size={30} color="#FF0000" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Now Playing</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <View style={styles.trackInfoContainer}>
+        <View style={styles.thumbnailPlaceholder}>
+          <Ionicons name="musical-notes" size={80} color="#FF0000" />
+        </View>
         
-        <TouchableOpacity style={[styles.playButton, isPlaying && styles.playButtonActive]} onPress={togglePlayPause}>
-          <Ionicons 
-            name={isPlaying ? 'pause-circle' : 'play-circle'} 
-            size={50} 
-            color={isPlaying ? '#FF0000' : '#FF0000'} 
+        <Text style={styles.trackTitle} numberOfLines={2}>
+          {currentTrack?.title || 'No track selected'}
+        </Text>
+        
+        <Text style={styles.trackArtist} numberOfLines={1}>
+          {currentTrack?.channel || currentTrack?.artist || 'Unknown Artist'}
+        </Text>
+      </View>
+
+      <View style={styles.progressContainer}>
+        <Text style={styles.timeText}>{formatTime(sliderValue)}</Text>
+        <View style={styles.sliderContainer}>
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={playerState.duration}
+            value={sliderValue}
+            onValueChange={handleSliderChange}
+            onSlidingComplete={handleSliderComplete}
+            minimumTrackTintColor="#FF0000"
+            maximumTrackTintColor="#ccc"
+            thumbTintColor="#FF0000"
+          />
+        </View>
+        <Text style={styles.timeText}>{formatTime(playerState.duration)}</Text>
+      </View>
+
+      <View style={styles.controlsContainer}>
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={toggleShuffle}
+        >
+          <Ionicons
+            name={playerState.isShuffled ? 'shuffle' : 'shuffle-outline'}
+            size={24}
+            color={playerState.isShuffled ? '#FF0000' : '#999'}
           />
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.controlButton} onPress={handleNext}>
-          <Ionicons name="play-skip-forward" size={30} color="#FF0000" />
+
+        <TouchableOpacity
+          style={styles.mainControlButton}
+          onPress={playPrevious}
+        >
+          <Ionicons name="play-skip-back" size={32} color="#333" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.playButton, playerState.isPlaying && styles.playButtonActive]}
+          onPress={togglePlayPause}
+          disabled={!currentTrack}
+        >
+          <Ionicons
+            name={playerState.isPlaying ? 'pause' : 'play'}
+            size={32}
+            color="#fff"
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.mainControlButton}
+          onPress={playNext}
+        >
+          <Ionicons name="play-skip-forward" size={32} color="#333" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={toggleLoop}
+        >
+          <Ionicons
+            name={playerState.isLooping ? 'repeat' : 'repeat-outline'}
+            size={24}
+            color={playerState.isLooping ? '#FF0000' : '#999'}
+          />
         </TouchableOpacity>
       </View>
-      
-      <View style={styles.extraControls}>
-        <TouchableOpacity style={[styles.extraButton, isLooping && styles.extraButtonActive]} onPress={toggleLoop}>
-          <Text style={styles.extraButtonText}>🔁 Loop</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.extraButton, shuffle && styles.extraButtonActive]} onPress={toggleShuffle}>
-          <Text style={styles.extraButtonText}>🔀 Shuffle</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.queueButton} onPress={handleQueue}>
-          <Ionicons name="list-outline" size={24} color="#FF0000" />
-          <Text style={styles.queueButtonText}>Queue</Text>
-        </TouchableOpacity>
-      </View>
+
+      {playerState.playlist.length > 0 && (
+        <View style={styles.queueContainer}>
+          <Text style={styles.queueTitle}>
+            Up Next ({playerState.playlist.length})
+          </Text>
+          <ScrollView style={styles.queueList} nestedScrollEnabled>
+            {playerState.playlist.map((song, index) => (
+              <TouchableOpacity
+                key={song.id}
+                style={[
+                  styles.queueItem,
+                  index === playerState.currentIndex && styles.queueItemActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.queueItemText,
+                    index === playerState.currentIndex && styles.queueItemTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {index + 1}. {song.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -87,64 +169,124 @@ export default function PlayerScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#fff',
   },
-  title: {
-    fontSize: 24,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 40,
+  },
+  backButton: {
+    padding: 5,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 30,
     textAlign: 'center',
   },
-  playerControls: {
-    flexDirection: 'row',
+  headerSpacer: {
+    width: 34,
+  },
+  trackInfoContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  thumbnailPlaceholder: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#f5f5f5',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
   },
-  controlButton: {
-    padding: 15,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 50,
-    marginHorizontal: 10,
-  },
-  playButton: {
-    padding: 20,
-    backgroundColor: '#FF0000',
-    borderRadius: 50,
-  },
-  playButtonActive: {
-    backgroundColor: '#333',
-  },
-  extraControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 20,
-  },
-  extraButton: {
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 25,
-  },
-  extraButtonActive: {
-    backgroundColor: '#333',
-  },
-  extraButtonText: {
-    color: '#333',
-    fontSize: 12,
+  trackTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 20,
   },
-  queueButton: {
+  trackArtist: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 25,
+    paddingHorizontal: 30,
+    marginTop: 20,
   },
-  queueButtonText: {
-    color: '#333',
+  timeText: {
+    fontSize: 12,
+    color: '#999',
+    width: 40,
+  },
+  sliderContainer: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  controlsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: 40,
+    paddingHorizontal: 20,
+  },
+  controlButton: {
+    padding: 10,
+  },
+  mainControlButton: {
+    padding: 15,
+  },
+  playButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FF0000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButtonActive: {
+    backgroundColor: '#cc0000',
+  },
+  queueContainer: {
+    marginTop: 40,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  queueTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  queueList: {
+    maxHeight: 150,
+  },
+  queueItem: {
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    marginBottom: 8,
+    borderRadius: 8,
+  },
+  queueItemActive: {
+    backgroundColor: '#fff0f0',
+    borderWidth: 1,
+    borderColor: '#FF0000',
+  },
+  queueItemText: {
     fontSize: 14,
-    marginLeft: 8,
+    color: '#333',
+  },
+  queueItemTextActive: {
+    color: '#FF0000',
     fontWeight: 'bold',
   },
 });
