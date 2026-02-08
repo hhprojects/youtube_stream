@@ -5,6 +5,7 @@ import SearchScreen from './frontend/src/screens/SearchScreen';
 import LibraryScreen from './frontend/src/screens/LibraryScreen';
 import PlayerScreen from './frontend/src/screens/PlayerScreen';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { AudioProvider } from './frontend/src/services/audioPlayer';
 
 const Tab = createBottomTabNavigator();
 
@@ -34,8 +35,10 @@ const tabNavigator = () => (
 
 export default function App() {
   return (
-    <NavigationContainer>
-      {tabNavigator()}
-    </NavigationContainer>
+    <AudioProvider>
+      <NavigationContainer>
+        {tabNavigator()}
+      </NavigationContainer>
+    </AudioProvider>
   );
 }

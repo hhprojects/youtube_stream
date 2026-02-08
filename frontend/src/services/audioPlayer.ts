@@ -1,4 +1,5 @@
-import { createAudioPlayer, setAudioModeAsync, AudioPlayer as ExpoAudioPlayer } from 'expo-audio';
+import React, { createContext, useContext, ReactNode, useRef } from 'react';
+import { useAudioPlayer, useAudioPlayerStatus, createAudioPlayer, AudioPlayer as ExpoAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 export type PlaybackStatus = {
   isPlaying: boolean;
@@ -8,174 +9,200 @@ export type PlaybackStatus = {
   didJustFinish: boolean;
 };
 
-class AudioPlayer {
-  private player: ExpoAudioPlayer | null = null;
-  private listeners: Array<(status: PlaybackStatus) => void> = [];
-  private currentUrl: string | null = null;
-  private playbackStatus: PlaybackStatus = {
+interface AudioContextType {
+  playSong: (url: string) => Promise<void>;
+  pause: () => Promise<void>;
+  play: () => Promise<void>;
+  stop: () => Promise<void>;
+  seek: (positionMillis: number) => Promise<void>;
+  playerState: PlaybackStatus;
+  currentUrl: string | null;
+}
+
+const AudioContext = createContext<AudioContextType | null>(null);
+
+export const useGlobalAudio = () => {
+  const context = useContext(AudioContext);
+  if (!context) {
+    throw new Error('useGlobalAudio must be used within AudioProvider');
+  }
+  return context;
+};
+
+export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const player = useRef<ExpoAudioPlayer | null>(null);
+  const listeners = useRef<Array<(status: PlaybackStatus) => void>>([]);
+  const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
     isPlaying: false,
     isBuffering: false,
     positionMillis: 0,
     durationMillis: 0,
     didJustFinish: false,
-  };
-  private statusUpdateInterval: NodeJS.Timeout | null = null;
+  });
+  const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
+  const statusUpdateInterval = useRef<NodeJS.Timeout | null>(null);
 
-  async load(url: string): Promise<void> {
-    if (this.player) {
-      await this.unload();
-    }
+  // Setup audio mode
+  React.useEffect(() => {
+    (async () => {
+      try {
+        await setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+        });
+        console.log('Audio mode configured successfully');
+      } catch (error) {
+        console.error('Failed to setup audio:', error);
+      }
+    })();
+  }, []);
 
+  const playSong = async (url: string): Promise<void> => {
     try {
-      // Create audio player with source
-      this.player = createAudioPlayer(url, {
+      // Create new player with source
+      const newPlayer = createAudioPlayer(url, {
         updateInterval: 1000,
       });
 
-      this.currentUrl = url;
+      if (player.current) {
+        try {
+          player.current.stop();
+        } catch (e) {
+          console.error('Error stopping old player:', e);
+        }
+      }
 
-      // Start polling for playback status updates
-      this.startPlaybackStatusPolling();
+      player.current = newPlayer;
+      setCurrentUrl(url);
+
+      // Start polling for status
+      if (statusUpdateInterval.current) {
+        clearInterval(statusUpdateInterval.current);
+      }
+
+      statusUpdateInterval.current = setInterval(() => {
+        if (newPlayer) {
+          try {
+            const status = newPlayer.getStatus();
+            setPlayerState({
+              isPlaying: status.playing,
+              isBuffering: status.buffering || false,
+              positionMillis: status.currentTime * 1000,
+              durationMillis: status.duration ? status.duration * 1000 : 0,
+              didJustFinish: false,
+            });
+          } catch (error) {
+            console.error('Error polling status:', error);
+          }
+        }
+      }, 1000);
+
+      console.log('Audio loaded:', url);
     } catch (error) {
-      console.error('Failed to load audio:', error);
+      console.error('Failed to play song:', error);
       throw error;
     }
-  }
+  };
 
-  async play(): Promise<void> {
-    if (!this.player) {
+  const play = async (): Promise<void> => {
+    if (!player.current) {
       throw new Error('No audio loaded');
     }
 
     try {
-      await this.player.playAsync();
-      this.playbackStatus.isPlaying = true;
-      this.notifyListeners();
+      await player.current.play();
+      setPlayerState(prev => ({ ...prev, isPlaying: true }));
     } catch (error) {
       console.error('Failed to play audio:', error);
       throw error;
     }
-  }
+  };
 
-  async pause(): Promise<void> {
-    if (!this.player) return;
+  const pause = async (): Promise<void> => {
+    if (!player.current) return;
 
     try {
-      const status = this.player.getStatus();
-      if (status.playing) {
-        await this.player.pauseAsync();
-        this.playbackStatus.isPlaying = false;
-        this.notifyListeners();
-      }
+      await player.current.pause();
+      setPlayerState(prev => ({ ...prev, isPlaying: false }));
     } catch (error) {
       console.error('Failed to pause audio:', error);
     }
-  }
+  };
 
-  async stop(): Promise<void> {
-    if (!this.player) return;
+  const stop = async (): Promise<void> => {
+    if (!player.current) return;
 
     try {
-      const status = this.player.getStatus();
-      if (status.playing) {
-        await this.player.stopAsync();
-        this.playbackStatus.isPlaying = false;
-        this.playbackStatus.positionMillis = 0;
-        this.notifyListeners();
-      }
+      await player.current.stop();
+      setPlayerState(prev => ({
+        ...prev,
+        isPlaying: false,
+        positionMillis: 0,
+      }));
     } catch (error) {
       console.error('Failed to stop audio:', error);
     }
-  }
+  };
 
-  async seek(positionMillis: number): Promise<void> {
-    if (!this.player) return;
+  const seek = async (positionMillis: number): Promise<void> => {
+    if (!player.current) return;
 
     try {
-      // expo-audio uses seconds, not milliseconds
       const positionSeconds = positionMillis / 1000;
-      await this.player.seekTo(positionSeconds);
-      this.playbackStatus.positionMillis = positionMillis;
-      this.notifyListeners();
+      await player.current.seekTo(positionSeconds);
+      setPlayerState(prev => ({ ...prev, positionMillis }));
     } catch (error) {
       console.error('Failed to seek audio:', error);
     }
-  }
+  };
 
-  async unload(): Promise<void> {
-    if (this.player) {
-      try {
-        await this.player.stopAsync();
-        this.player.release();
-        this.player = null;
-        this.currentUrl = null;
-        this.stopPlaybackStatusPolling();
-      } catch (error) {
-        console.error('Failed to unload audio:', error);
-      }
-    }
-  }
+  const value: AudioContextType = {
+    playSong,
+    play,
+    pause,
+    stop,
+    seek,
+    playerState,
+    currentUrl,
+  };
 
-  private startPlaybackStatusPolling() {
-    this.stopPlaybackStatusPolling();
-    this.playbackStatusUpdateInterval = setInterval(() => {
-      if (this.player) {
-        try {
-          const status = this.player.getStatus();
+  return (
+    <AudioContext.Provider value={value}>
+      {children}
+    </AudioContext.Provider>
+  );
+};
 
-          this.playbackStatus = {
-            isPlaying: status.playing,
-            isBuffering: status.buffering || false,
-            positionMillis: status.currentTime * 1000, // Convert seconds to milliseconds
-            durationMillis: status.duration ? status.duration * 1000 : 0, // Convert seconds to milliseconds
-            didJustFinish: false, // expo-audio doesn't have didJustFinish
-          };
+// Legacy export for backward compatibility
+const audioContext = {
+  playSong: () => Promise.resolve(),
+  play: () => Promise.resolve(),
+  pause: () => Promise.resolve(),
+  stop: () => Promise.resolve(),
+  seek: () => Promise.resolve(),
+  playerState: {
+    isPlaying: false,
+    isBuffering: false,
+    positionMillis: 0,
+    durationMillis: 0,
+    didJustFinish: false,
+  },
+  currentUrl: null,
+};
 
-          this.notifyListeners();
-        } catch (error) {
-          console.error('Error polling playback status:', error);
-        }
-      }
-    }, 1000);
-  }
+export const audioPlayer = {
+  ...audioContext,
+  addListener: (listener: (status: PlaybackStatus) => void) => {
+    console.warn('addListener is deprecated, use useGlobalAudio hook instead');
+  },
+  removeListener: (listener: (status: PlaybackStatus) => void) => {
+    console.warn('removeListener is deprecated, use useGlobalAudio hook instead');
+  },
+  getCurrentUrl: () => audioContext.currentUrl,
+};
 
-  private stopPlaybackStatusPolling() {
-    if (this.playbackStatusUpdateInterval) {
-      clearInterval(this.playbackStatusUpdateInterval);
-      this.playbackStatusUpdateInterval = null;
-    }
-  }
-
-  addListener(listener: (status: PlaybackStatus) => void): void {
-    this.listeners.push(listener);
-  }
-
-  removeListener(listener: (status: PlaybackStatus) => void): void {
-    this.listeners = this.listeners.filter(l => l !== listener);
-  }
-
-  private notifyListeners() {
-    this.listeners.forEach(listener => listener({ ...this.playbackStatus }));
-  }
-
-  getCurrentUrl(): string | null {
-    return this.currentUrl;
-  }
-}
-
-export const audioPlayer = new AudioPlayer();
-
-// Setup audio mode
 export const setupAudio = async (): Promise<void> => {
-  try {
-    await setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
-    });
-
-    console.log('Audio mode configured successfully');
-  } catch (error) {
-    console.error('Failed to setup audio:', error);
-  }
+  // Audio mode is now set in AudioProvider
+  console.log('setupAudio() called - audio mode configured in provider');
 };

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Song } from '../types';
-import { audioPlayer, setupAudio, PlaybackStatus } from '../services/audioPlayer';
+import { useGlobalAudio } from '../services/audioPlayer';
 
 export interface PlayerState {
   isPlaying: boolean;
@@ -14,7 +14,8 @@ export interface PlayerState {
 }
 
 export const useMusicPlayer = () => {
-  const [playerState, setPlayerState] = useState<PlayerState>({
+  const { playSong, play, pause, seek, playerState, currentUrl } = useGlobalAudio();
+  const [localPlayerState, setLocalPlayerState] = useState<PlayerState>({
     isPlaying: false,
     currentSong: null,
     playlist: [],
@@ -25,16 +26,21 @@ export const useMusicPlayer = () => {
     duration: 0,
   });
 
-  // Use refs to avoid stale closures in the playback listener
-  const playerStateRef = useRef(playerState);
-  playerStateRef.current = playerState;
+  // Sync global player state with local state
+  useEffect(() => {
+    setLocalPlayerState(prev => ({
+      ...prev,
+      isPlaying: playerState.isPlaying,
+      position: playerState.positionMillis,
+      duration: playerState.durationMillis,
+    }));
+  }, [playerState]);
 
-  const playSong = useCallback(async (song: Song, playlist?: Song[], index?: number) => {
+  const playSongLocal = useCallback(async (song: Song, playlist?: Song[], index?: number) => {
     try {
-      await audioPlayer.load(song.path);
-      await audioPlayer.play();
+      await playSong(song.path);
 
-      setPlayerState(prev => ({
+      setLocalPlayerState(prev => ({
         ...prev,
         currentSong: song,
         playlist: playlist || [],
@@ -46,117 +52,87 @@ export const useMusicPlayer = () => {
     } catch (error) {
       console.error('Failed to play song:', error);
     }
-  }, []);
+  }, [playSong]);
 
   const playNext = useCallback(() => {
-    const state = playerStateRef.current;
-    if (state.playlist.length === 0) return;
+    const { playlist, currentIndex, isLooping, isShuffled } = localPlayerState;
+    if (playlist.length === 0) return;
 
-    let nextIndex = state.currentIndex + 1;
+    let nextIndex = currentIndex + 1;
 
-    if (state.isShuffled) {
-      nextIndex = Math.floor(Math.random() * state.playlist.length);
-    } else if (nextIndex >= state.playlist.length) {
-      if (state.isLooping) {
+    if (isShuffled) {
+      nextIndex = Math.floor(Math.random() * playlist.length);
+    } else if (nextIndex >= playlist.length) {
+      if (isLooping) {
         nextIndex = 0;
       } else {
         return;
       }
     }
 
-    playSong(state.playlist[nextIndex], state.playlist, nextIndex);
-  }, [playSong]);
+    playSongLocal(playlist[nextIndex], playlist, nextIndex);
+  }, [localPlayerState, playSongLocal]);
 
   const playPrevious = useCallback(() => {
-    const state = playerStateRef.current;
-    if (state.playlist.length === 0) return;
+    const { playlist, currentIndex, isLooping, isShuffled } = localPlayerState;
+    if (playlist.length === 0) return;
 
-    let prevIndex = state.currentIndex - 1;
+    let prevIndex = currentIndex - 1;
 
-    if (state.isShuffled) {
-      prevIndex = Math.floor(Math.random() * state.playlist.length);
+    if (isShuffled) {
+      prevIndex = Math.floor(Math.random() * playlist.length);
     } else if (prevIndex < 0) {
-      if (state.isLooping) {
-        prevIndex = state.playlist.length - 1;
+      if (isLooping) {
+        prevIndex = playlist.length - 1;
       } else {
         return;
       }
     }
 
-    playSong(state.playlist[prevIndex], state.playlist, prevIndex);
-  }, [playSong]);
+    playSongLocal(playlist[prevIndex], playlist, prevIndex);
+  }, [localPlayerState, playSongLocal]);
 
+  // Check for song finish and auto-play next
   useEffect(() => {
-    setupAudio();
+    const { playlist, isLooping, isPlaying } = localPlayerState;
+    if (!isPlaying || playlist.length === 0) return;
 
-    const listener = (status: PlaybackStatus) => {
-      setPlayerState(prev => ({
-        ...prev,
-        isPlaying: status.isPlaying,
-        position: status.positionMillis,
-        duration: status.durationMillis,
-      }));
-
-      if (status.didJustFinish) {
-        const state = playerStateRef.current;
-        if (state.isLooping && state.playlist.length === 0) {
-          audioPlayer.seek(0);
-          audioPlayer.play();
-        } else {
-          playNext();
-        }
+    // Check if song finished (position near duration)
+    if (playerState.positionMillis > 0 &&
+        playerState.durationMillis > 0 &&
+        Math.abs(playerState.positionMillis - playerState.durationMillis) < 100 &&
+        !playerState.isPlaying) {
+      if (isLooping && playlist.length === 1) {
+        seek(0);
+        play();
+      } else {
+        playNext();
       }
-    };
-
-    audioPlayer.addListener(listener);
-
-    return () => {
-      audioPlayer.removeListener(listener);
-      audioPlayer.unload();
-    };
-  }, [playNext]);
+    }
+  }, [playerState, localPlayerState, playNext, seek, play]);
 
   const togglePlayPause = useCallback(async () => {
-    const state = playerStateRef.current;
+    const { currentSong } = localPlayerState;
+    if (!currentSong) return;
 
-    console.log('togglePlayPause called:', {
-      currentSong: state.currentSong?.title,
-      isPlaying: state.isPlaying,
-    });
-
-    if (!state.currentSong) {
-      console.log('No current song to toggle');
-      return;
+    if (localPlayerState.isPlaying) {
+      await pause();
+    } else {
+      await play();
     }
-
-    try {
-      if (state.isPlaying) {
-        console.log('Pausing...');
-        await audioPlayer.pause();
-      } else {
-        console.log('Playing...');
-        await audioPlayer.play();
-      }
-    } catch (error) {
-      console.error('Error in togglePlayPause:', error);
-    }
-  }, []);
-
-  const seek = useCallback(async (position: number) => {
-    await audioPlayer.seek(position);
-  }, []);
+  }, [localPlayerState, pause, play]);
 
   const toggleLoop = useCallback(() => {
-    setPlayerState(prev => ({ ...prev, isLooping: !prev.isLooping }));
+    setLocalPlayerState(prev => ({ ...prev, isLooping: !prev.isLooping }));
   }, []);
 
   const toggleShuffle = useCallback(() => {
-    setPlayerState(prev => ({ ...prev, isShuffled: !prev.isShuffled }));
+    setLocalPlayerState(prev => ({ ...prev, isShuffled: !prev.isShuffled }));
   }, []);
 
   return {
-    playerState,
-    playSong,
+    playerState: localPlayerState,
+    playSong: playSongLocal,
     togglePlayPause,
     playNext,
     playPrevious,
