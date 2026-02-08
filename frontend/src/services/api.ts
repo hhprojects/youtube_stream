@@ -1,29 +1,13 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
+import { SearchResult, Song } from '../types';
+
+export type { SearchResult, Song };
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
 });
-
-export interface SearchResult {
-  id: string;
-  title: string;
-  channel: string;
-  duration?: number;
-  url?: string;
-  thumbnail?: string;
-}
-
-export interface Song {
-  id: string;
-  title: string;
-  artist: string;
-  duration: string;
-  path: string;
-  size?: number;
-  dateAdded?: Date;
-}
 
 // Search YouTube
 export const searchVideos = async (query: string): Promise<SearchResult[]> => {

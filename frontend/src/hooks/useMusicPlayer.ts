@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Song } from '../types';
 import { audioPlayer, setupAudio, PlaybackStatus } from '../services/audioPlayer';
 
@@ -25,40 +25,15 @@ export const useMusicPlayer = () => {
     duration: 0,
   });
 
-  useEffect(() => {
-    setupAudio();
-
-    const listener = (status: PlaybackStatus) => {
-      setPlayerState(prev => ({
-        ...prev,
-        isPlaying: status.isPlaying,
-        position: status.positionMillis,
-        duration: status.durationMillis,
-      }));
-
-      if (status.didJustFinish) {
-        if (playerState.isLooping) {
-          audioPlayer.seek(0);
-          audioPlayer.play();
-        } else {
-          playNext();
-        }
-      }
-    };
-
-    audioPlayer.addListener(listener);
-
-    return () => {
-      audioPlayer.removeListener(listener);
-      audioPlayer.unload();
-    };
-  }, []);
+  // Use refs to avoid stale closures in the playback listener
+  const playerStateRef = useRef(playerState);
+  playerStateRef.current = playerState;
 
   const playSong = useCallback(async (song: Song, playlist?: Song[], index?: number) => {
     try {
       await audioPlayer.load(song.path);
       await audioPlayer.play();
-      
+
       setPlayerState(prev => ({
         ...prev,
         currentSong: song,
@@ -73,51 +48,84 @@ export const useMusicPlayer = () => {
     }
   }, []);
 
-  const togglePlayPause = useCallback(async () => {
-    if (!playerState.currentSong) return;
-
-    if (playerState.isPlaying) {
-      await audioPlayer.pause();
-    } else {
-      await audioPlayer.play();
-    }
-  }, [playerState.currentSong, playerState.isPlaying]);
-
   const playNext = useCallback(() => {
-    if (playerState.playlist.length === 0) return;
+    const state = playerStateRef.current;
+    if (state.playlist.length === 0) return;
 
-    let nextIndex = playerState.currentIndex + 1;
-    
-    if (playerState.isShuffled) {
-      nextIndex = Math.floor(Math.random() * playerState.playlist.length);
-    } else if (nextIndex >= playerState.playlist.length) {
-      if (playerState.isLooping) {
+    let nextIndex = state.currentIndex + 1;
+
+    if (state.isShuffled) {
+      nextIndex = Math.floor(Math.random() * state.playlist.length);
+    } else if (nextIndex >= state.playlist.length) {
+      if (state.isLooping) {
         nextIndex = 0;
       } else {
         return;
       }
     }
 
-    playSong(playerState.playlist[nextIndex], playerState.playlist, nextIndex);
-  }, [playerState.playlist, playerState.currentIndex, playerState.isShuffled, playerState.isLooping, playSong]);
+    playSong(state.playlist[nextIndex], state.playlist, nextIndex);
+  }, [playSong]);
 
   const playPrevious = useCallback(() => {
-    if (playerState.playlist.length === 0) return;
+    const state = playerStateRef.current;
+    if (state.playlist.length === 0) return;
 
-    let prevIndex = playerState.currentIndex - 1;
-    
-    if (playerState.isShuffled) {
-      prevIndex = Math.floor(Math.random() * playerState.playlist.length);
+    let prevIndex = state.currentIndex - 1;
+
+    if (state.isShuffled) {
+      prevIndex = Math.floor(Math.random() * state.playlist.length);
     } else if (prevIndex < 0) {
-      if (playerState.isLooping) {
-        prevIndex = playerState.playlist.length - 1;
+      if (state.isLooping) {
+        prevIndex = state.playlist.length - 1;
       } else {
         return;
       }
     }
 
-    playSong(playerState.playlist[prevIndex], playerState.playlist, prevIndex);
-  }, [playerState.playlist, playerState.currentIndex, playerState.isShuffled, playerState.isLooping, playSong]);
+    playSong(state.playlist[prevIndex], state.playlist, prevIndex);
+  }, [playSong]);
+
+  useEffect(() => {
+    setupAudio();
+
+    const listener = (status: PlaybackStatus) => {
+      setPlayerState(prev => ({
+        ...prev,
+        isPlaying: status.isPlaying,
+        position: status.positionMillis,
+        duration: status.durationMillis,
+      }));
+
+      if (status.didJustFinish) {
+        const state = playerStateRef.current;
+        if (state.isLooping && state.playlist.length === 0) {
+          audioPlayer.seek(0);
+          audioPlayer.play();
+        } else {
+          playNext();
+        }
+      }
+    };
+
+    audioPlayer.addListener(listener);
+
+    return () => {
+      audioPlayer.removeListener(listener);
+      audioPlayer.unload();
+    };
+  }, [playNext]);
+
+  const togglePlayPause = useCallback(async () => {
+    const state = playerStateRef.current;
+    if (!state.currentSong) return;
+
+    if (state.isPlaying) {
+      await audioPlayer.pause();
+    } else {
+      await audioPlayer.play();
+    }
+  }, []);
 
   const seek = useCallback(async (position: number) => {
     await audioPlayer.seek(position);

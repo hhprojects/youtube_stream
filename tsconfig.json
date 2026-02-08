@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "esnext",
-    "lib": ["es2017", "es6", "es5"],
+    "lib": [
+      "es2017",
+      "es6",
+      "es5"
+    ],
     "allowJs": true,
     "jsx": "react-native",
     "moduleResolution": "node",
@@ -12,5 +16,6 @@
   },
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

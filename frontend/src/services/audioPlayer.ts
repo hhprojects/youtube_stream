@@ -104,26 +104,18 @@ class AudioPlayer {
     }
   }
 
-  getStatus(): PlaybackStatus | null {
-    // This should be called after status updates
-    return null;
-  }
-
   onPlaybackStatusUpdate = (status: any): void => {
+    if (!status.isLoaded) return;
+
     const playbackStatus: PlaybackStatus = {
-      isPlaying: status.isPlaying,
-      isBuffering: status.isBuffering,
-      positionMillis: status.positionMillis,
-      durationMillis: status.durationMillis || 0,
-      didJustFinish: status.didJustFinish,
+      isPlaying: status.isPlaying ?? false,
+      isBuffering: status.isBuffering ?? false,
+      positionMillis: status.positionMillis ?? 0,
+      durationMillis: status.durationMillis ?? 0,
+      didJustFinish: status.didJustFinish ?? false,
     };
 
     this.listeners.forEach(listener => listener(playbackStatus));
-
-    if (status.didJustFinish) {
-      // Handle track completion
-      this.onTrackComplete?.();
-    }
   };
 
   addListener(listener: (status: PlaybackStatus) => void): void {
@@ -132,14 +124,6 @@ class AudioPlayer {
 
   removeListener(listener: (status: PlaybackStatus) => void): void {
     this.listeners = this.listeners.filter(l => l !== listener);
-  }
-
-  onTrackComplete?: () => void;
-  onTrackCompleteCallback?: () => void;
-
-  setTrackCompleteCallback(callback: () => void): void {
-    this.onTrackCompleteCallback = callback;
-    this.onTrackComplete = callback;
   }
 
   getCurrentUrl(): string | null {
@@ -155,9 +139,7 @@ export const setupAudio = async (): Promise<void> => {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
-      interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
       shouldDuckAndroid: true,
-      interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
     });
   } catch (error) {
     console.error('Failed to setup audio:', error);

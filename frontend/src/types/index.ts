@@ -1,4 +1,4 @@
-export interface Video {
+export interface SearchResult {
   id: string;
   title: string;
   channel: string;
@@ -7,7 +7,11 @@ export interface Video {
   thumbnail?: string;
 }
 
-export interface Song extends Video {
+export interface Song {
+  id: string;
+  title: string;
+  artist: string;
+  duration: string;
   path: string;
   size?: number;
   dateAdded?: Date;

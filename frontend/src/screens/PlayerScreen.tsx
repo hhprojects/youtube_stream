@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { SearchResult, Song } from '../types';
