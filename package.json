@@ -33,6 +33,7 @@
     "@babel/plugin-transform-nullish-coalescing-operator": "^7.25.9",
     "@babel/plugin-transform-optional-chaining": "^7.25.9",
     "@babel/preset-env": "^7.26.0",
-    "@babel/runtime": "^7.26.0"
+    "@babel/runtime": "^7.26.0",
+    "@react-native-community/cli": "^20.1.1"
   }
 }
