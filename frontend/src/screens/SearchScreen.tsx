@@ -12,7 +12,7 @@ import {
 import { StyleSheet } from 'react-native';
 import { searchVideos, downloadAudio } from '../services/api';
 import { SearchResult } from '../types';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function SearchScreen({ navigation }: any) {
   const [query, setQuery] = useState('');

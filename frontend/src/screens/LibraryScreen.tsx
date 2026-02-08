@@ -10,7 +10,7 @@ import {
 import { StyleSheet } from 'react-native';
 import { getLibrary, deleteSong, Song } from '../services/api';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function LibraryScreen({ navigation }: any) {
   const [songs, setSongs] = useState<Song[]>([]);
