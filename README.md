@@ -2,6 +2,34 @@
 
 A React Native app for searching YouTube videos, downloading music, and managing a personal music library with a built-in music player.
 
+## Project Structure
+
+```
+youtube_stream/
+├── backend/                 # Node.js + Express API server
+│   ├── server.js            # API endpoints
+│   └── downloads/           # Downloaded audio files
+├── frontend/                # React Native frontend
+│   ├── src/
+│   │   ├── screens/         # App screens
+│   │   ├── services/        # API client & audio player
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── components/      # Reusable components
+│   │   ├── types/          # TypeScript definitions
+│   │   ├── config/         # Configuration
+│   │   ├── navigation/      # Navigation setup
+│   │   └── assets/         # App assets
+│   ├── hooks/              # Git hooks
+│   └── routers/            # Backend routers (if any)
+├── App.tsx                 # Main app component
+├── index.js                # App entry point
+├── app.json                # React Native config
+├── metro.config.js          # Metro bundler config
+├── tsconfig.json           # TypeScript config
+├── package.json            # Dependencies and scripts
+└── .env.example           # Environment variables template
+```
+
 ## Features
 
 - **Search**: Find YouTube videos and music using yt-dlp
@@ -12,38 +40,14 @@ A React Native app for searching YouTube videos, downloading music, and managing
 
 ## Tech Stack
 
-- **Frontend**: React Native 0.74.6
-- **Navigation**: React Navigation (Bottom Tabs)
-- **Backend**: Node.js + Express API
-- **YouTube API**: yt-dlp (system-level wrapper)
+- **Frontend**: React Native 0.76.9
+- **Navigation**: React Navigation 7.x (Bottom Tabs)
+- **Backend**: Node.js + Express 4.21.0
+- **YouTube API**: yt-dlp 2025.04.30
 - **State Management**: React hooks (useState)
-- **Audio Playback**: expo-av
-- **Icons**: React Native Vector Icons (Ionicons)
-
-## Project Structure
-
-```
-youtube_stream/
-├── backend/
-│   ├── server.js              # Express API server
-│   └── downloads/              # Downloaded music files
-├── src/
-│   ├── screens/
-│   │   ├── SearchScreen.tsx    # YouTube search
-│   │   ├── LibraryScreen.tsx   # Downloaded songs
-│   │   └── PlayerScreen.tsx   # Music player
-│   ├── services/
-│   │   ├── api.ts             # API client
-│   │   └── audioPlayer.ts     # Audio player service
-│   ├── hooks/
-│   │   └── useMusicPlayer.ts  # Player state hook
-│   └── types/
-│       └── index.ts           # TypeScript types
-├── app.json                   # React Native app config
-├── package.json               # Project dependencies
-├── tsconfig.json              # TypeScript config
-└── README.md                  # This file
-```
+- **Audio Playback**: expo-av 16.0.8
+- **Icons**: React Native Vector Icons 10.2.0
+- **HTTP Client**: Axios 1.8.0
 
 ## Setup Instructions
 
@@ -51,13 +55,21 @@ youtube_stream/
 
 1. **Install Node.js dependencies**
    ```bash
-   cd /home/hh-pi/.openclaw/workspace/youtube_stream
-   npm install --legacy-peer-deps
+   cd youtube_stream
+   npm install
    ```
+
+   **Note**: Requires Node.js >= 20.19.4
 
 2. **Install yt-dlp** (YouTube downloader)
    ```bash
    sudo apt install -y yt-dlp
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
    ```
 
 ### Running the Backend
@@ -68,7 +80,7 @@ The backend API server is required for the app to function. Start it with:
 npm run backend
 ```
 
-The backend will run on `http://localhost:3001` and serves:
+The backend will run on `http://localhost:3001` (or configured port) and serves:
 - `/api/search` - YouTube search endpoint
 - `/api/download` - Download audio endpoint
 - `/api/library` - List downloaded songs
@@ -108,7 +120,8 @@ npm run ios
 - ✅ Audio playback with controls
 - ✅ Playlist/queue support
 - ✅ Loop and shuffle modes
-- ⏳ React Native mobile app (ready to run)
+- ✅ Environment variables support
+- ✅ Frontend/Backend separation
 
 ## API Endpoints
 
@@ -190,6 +203,19 @@ Response:
 }
 ```
 
+## Environment Variables
+
+Create a `.env` file from `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Available variables:
+- `REACT_APP_API_URL` - Backend API URL for frontend
+- `BACKEND_PORT` - Backend server port (default: 3001)
+- `DOWNLOAD_DIR` - Download directory path (default: ./backend/downloads)
+
 ## TODO / Future Enhancements
 
 - [ ] Add download progress indicators
@@ -199,6 +225,16 @@ Response:
 - [ ] Audio visualization
 - [ ] Lyrics integration
 - [ ] Share functionality
+- [ ] Background audio support
+
+## Documentation
+
+- **README.md** - This file
+- **QUICKSTART.md** - Quick start guide
+- **LOCAL_DEV.md** - Local machine development with emulator
+- **STATUS.md** - Detailed project status and to-do list
+- **WARNINGS_FIX.md** - Installation warnings and fixes
+- **DEPENDENCY_UPDATE.md** - Dependency update history
 
 ## GitHub Repository
 

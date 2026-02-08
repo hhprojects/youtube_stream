@@ -3,10 +3,15 @@
 **Last Updated**: 2026-02-08
 **Current Version**: 1.0.0
 **GitHub**: https://github.com/hhprojects/youtube_stream
+**Structure**: Frontend/Backend Separated
 
 ---
 
-## ✅ Features Working
+## Project Structure
+
+- `backend/` - Node.js + Express API server
+- `frontend/` - React Native frontend code
+- Root - Configuration files (App.tsx, package.json, etc.)
 
 ### Backend API (100% Complete)
 - [x] Express server running on port 3001

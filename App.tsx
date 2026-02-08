@@ -1,9 +1,9 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import SearchScreen from './screens/SearchScreen';
-import LibraryScreen from './screens/LibraryScreen';
-import PlayerScreen from './screens/PlayerScreen';
+import SearchScreen from './frontend/src/screens/SearchScreen';
+import LibraryScreen from './frontend/src/screens/LibraryScreen';
+import PlayerScreen from './frontend/src/screens/PlayerScreen';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const Tab = createBottomTabNavigator();
