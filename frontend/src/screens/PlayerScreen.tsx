@@ -41,7 +41,7 @@ export default function PlayerScreen({ route, navigation }: any) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const currentTrack = video || playerState.currentSong;
+  const currentTrack = playerState.currentSong || video;
 
   return (
     <ScrollView style={styles.container}>

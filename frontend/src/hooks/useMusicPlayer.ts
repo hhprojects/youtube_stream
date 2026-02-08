@@ -118,12 +118,27 @@ export const useMusicPlayer = () => {
 
   const togglePlayPause = useCallback(async () => {
     const state = playerStateRef.current;
-    if (!state.currentSong) return;
 
-    if (state.isPlaying) {
-      await audioPlayer.pause();
-    } else {
-      await audioPlayer.play();
+    console.log('togglePlayPause called:', {
+      currentSong: state.currentSong?.title,
+      isPlaying: state.isPlaying,
+    });
+
+    if (!state.currentSong) {
+      console.log('No current song to toggle');
+      return;
+    }
+
+    try {
+      if (state.isPlaying) {
+        console.log('Pausing...');
+        await audioPlayer.pause();
+      } else {
+        console.log('Playing...');
+        await audioPlayer.play();
+      }
+    } catch (error) {
+      console.error('Error in togglePlayPause:', error);
     }
   }, []);
 
