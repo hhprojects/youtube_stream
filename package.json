@@ -22,7 +22,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "expo": "^54.0.33",
-    "expo-av": "~16.0.8",
+    "expo-audio": "~2.0.0",
     "expo-secure-store": "~15.0.8",
     "express": "^4.21.0",
     "react": "19.1.0",
