@@ -13,6 +13,7 @@ import { StyleSheet } from 'react-native';
 import { searchVideos, downloadAudio } from '../services/api';
 import { SearchResult } from '../types';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { MiniPlayer } from '../components/MiniPlayer';
 
 export default function SearchScreen({ navigation }: any) {
   const [query, setQuery] = useState('');
@@ -125,7 +126,9 @@ export default function SearchScreen({ navigation }: any) {
             </Text>
           </View>
         }
+        contentContainerStyle={styles.listContent}
       />
+      <MiniPlayer navigation={navigation} />
     </View>
   );
 }
@@ -207,5 +210,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
     marginTop: 10,
+  },
+  listContent: {
+    paddingBottom: 100, // Space for mini player
   },
 });

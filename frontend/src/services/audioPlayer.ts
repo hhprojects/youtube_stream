@@ -141,6 +141,11 @@ export const setupAudio = async (): Promise<void> => {
       staysActiveInBackground: true,
       shouldDuckAndroid: true,
     });
+
+    // Set audio as active for media controls
+    await Audio.setActiveAsync(true);
+
+    console.log('Audio mode configured successfully');
   } catch (error) {
     console.error('Failed to setup audio:', error);
   }

@@ -11,6 +11,7 @@ import { StyleSheet } from 'react-native';
 import { getLibrary, deleteSong, Song } from '../services/api';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { MiniPlayer } from '../components/MiniPlayer';
 
 export default function LibraryScreen({ navigation }: any) {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -125,7 +126,7 @@ export default function LibraryScreen({ navigation }: any) {
           <Ionicons name="refresh" size={24} color="#FF0000" />
         </TouchableOpacity>
       </View>
-      
+
       {songs.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="musical-notes-outline" size={64} color="#ccc" />
@@ -144,8 +145,10 @@ export default function LibraryScreen({ navigation }: any) {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshing={refreshing}
           onRefresh={handleRefresh}
+          contentContainerStyle={styles.listContent}
         />
       )}
+      <MiniPlayer navigation={navigation} />
     </View>
   );
 }
@@ -237,5 +240,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+  },
+  listContent: {
+    paddingBottom: 100, // Space for mini player
   },
 });
