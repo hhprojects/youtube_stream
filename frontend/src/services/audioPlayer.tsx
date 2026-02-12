@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, ReactNode, useRef, useEffect } from 'react';
 import { useAudioPlayer, useAudioPlayerStatus, createAudioPlayer, AudioPlayer as ExpoAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 export type PlaybackStatus = {
@@ -34,7 +34,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
 
   // Setup audio mode
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         await setAudioModeAsync({
@@ -47,8 +47,11 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     })();
   }, []);
 
-  // Use the useAudioPlayerStatus hook to get player state
-  const playerStatus = useAudioPlayerStatus(player.current);
+  // State for when player is ready (player.current is not null)
+  const [playerReady, setPlayerReady] = React.useState(false);
+
+  // Use the useAudioPlayerStatus hook - only when player exists
+  const playerStatus = useAudioPlayerStatus(playerReady ? player.current : null);
 
   // Convert playerStatus to our PlaybackStatus format
   const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
@@ -60,7 +63,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   });
 
   // Update playerState when playerStatus changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (playerStatus) {
       setPlayerState({
         isPlaying: playerStatus.playing || false,
@@ -71,6 +74,11 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
     }
   }, [playerStatus]);
+
+  // Set playerReady when player.current is set
+  useEffect(() => {
+    setPlayerReady(player.current !== null);
+  }, [player.current]);
 
   const playSong = async (url: string): Promise<void> => {
     try {
