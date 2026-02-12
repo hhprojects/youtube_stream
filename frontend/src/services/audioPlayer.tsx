@@ -6,7 +6,6 @@ export type PlaybackStatus = {
   isBuffering: boolean;
   positionMillis: number;
   durationMillis: number;
-  didJustFinish: boolean;
 };
 
 interface AudioContextType {
@@ -35,14 +34,15 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const player = useRef<ExpoAudioPlayer>(initialPlayer);
   const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
 
-  // Default state when no player exists
+  // Initial player state
   const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
     isPlaying: false,
     isBuffering: false,
     positionMillis: 0,
     durationMillis: 0,
-    didJustFinish: false,
   });
+
+  const statusUpdateInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Setup audio mode
   useEffect(() => {
@@ -91,6 +91,32 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       player.current = newPlayer;
       setCurrentUrl(url);
 
+      // Start polling for status - our own polling, NOT using useAudioPlayerStatus
+      if (statusUpdateInterval.current) {
+        clearInterval(statusUpdateInterval.current);
+      }
+
+      statusUpdateInterval.current = setInterval(() => {
+        if (newPlayer) {
+          try {
+            // Directly access player properties
+            const playing = newPlayer.playing || false;
+            const buffering = newPlayer.isBuffering || false;
+            const currentTime = newPlayer.currentTime || 0;
+            const duration = newPlayer.duration || 0;
+
+            setPlayerState({
+              isPlaying: playing,
+              isBuffering: buffering,
+              positionMillis: currentTime * 1000,
+              durationMillis: duration * 1000,
+            });
+          } catch (error) {
+            console.error('Error polling status:', error);
+          }
+        }
+      }, 1000);
+
       console.log('Audio loaded:', url);
     } catch (error) {
       console.error('Failed to play song:', error);
@@ -105,7 +131,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     try {
       await player.current.play();
-      // Player will update automatically via useAudioPlayerStatus hook
+      setPlayerState(prev => ({ ...prev, isPlaying: true }));
     } catch (error) {
       console.error('Failed to play audio:', error);
       throw error;
@@ -115,7 +141,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const pause = async (): Promise<void> => {
     try {
       await player.current.pause();
-      // Player will update automatically via useAudioPlayerStatus hook
+      setPlayerState(prev => ({ ...prev, isPlaying: false }));
     } catch (error) {
       console.error('Failed to pause audio:', error);
     }
@@ -123,11 +149,9 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const stop = async (): Promise<void> => {
     try {
-      // In expo-audio v55, there's no stop() method
-      // We pause and reset position by seeking to 0
       await player.current.pause();
       await player.current.seekTo(0);
-      // Player will update automatically via useAudioPlayerStatus hook
+      setPlayerState(prev => ({ ...prev, isPlaying: false, positionMillis: 0 }));
     } catch (error) {
       console.error('Failed to stop audio:', error);
     }
@@ -137,7 +161,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const positionSeconds = positionMillis / 1000;
       await player.current.seekTo(positionSeconds);
-      // Player will update automatically via useAudioPlayerStatus hook
+      setPlayerState(prev => ({ ...prev, positionMillis }));
     } catch (error) {
       console.error('Failed to seek audio:', error);
     }
@@ -172,7 +196,6 @@ const audioContext = {
     isBuffering: false,
     positionMillis: 0,
     durationMillis: 0,
-    didJustFinish: false,
   },
   currentUrl: null,
 };
