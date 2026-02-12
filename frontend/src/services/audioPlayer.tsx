@@ -31,16 +31,7 @@ export const useGlobalAudio = () => {
 
 export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const player = useRef<ExpoAudioPlayer | null>(null);
-  const listeners = useRef<Array<(status: PlaybackStatus) => void>>([]);
-  const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
-    isPlaying: false,
-    isBuffering: false,
-    positionMillis: 0,
-    durationMillis: 0,
-    didJustFinish: false,
-  });
   const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
-  const statusUpdateInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Setup audio mode
   React.useEffect(() => {
@@ -55,6 +46,31 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
     })();
   }, []);
+
+  // Use the useAudioPlayerStatus hook to get player state
+  const playerStatus = useAudioPlayerStatus(player.current);
+
+  // Convert playerStatus to our PlaybackStatus format
+  const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
+    isPlaying: false,
+    isBuffering: false,
+    positionMillis: 0,
+    durationMillis: 0,
+    didJustFinish: false,
+  });
+
+  // Update playerState when playerStatus changes
+  React.useEffect(() => {
+    if (playerStatus) {
+      setPlayerState({
+        isPlaying: playerStatus.playing || false,
+        isBuffering: playerStatus.isBuffering || false,
+        positionMillis: (playerStatus.currentTime || 0) * 1000,
+        durationMillis: (playerStatus.duration || 0) * 1000,
+        didJustFinish: playerStatus.didJustFinish || false,
+      });
+    }
+  }, [playerStatus]);
 
   const playSong = async (url: string): Promise<void> => {
     try {
@@ -75,28 +91,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       player.current = newPlayer;
       setCurrentUrl(url);
 
-      // Start polling for status
-      if (statusUpdateInterval.current) {
-        clearInterval(statusUpdateInterval.current);
-      }
-
-      statusUpdateInterval.current = setInterval(() => {
-        if (newPlayer) {
-          try {
-            // Directly access properties instead of calling getStatus()
-            setPlayerState({
-              isPlaying: newPlayer.playing,
-              isBuffering: newPlayer.isBuffering || false,
-              positionMillis: newPlayer.currentTime * 1000,
-              durationMillis: newPlayer.duration ? newPlayer.duration * 1000 : 0,
-              didJustFinish: false,
-            });
-          } catch (error) {
-            console.error('Error polling status:', error);
-          }
-        }
-      }, 1000);
-
       console.log('Audio loaded:', url);
     } catch (error) {
       console.error('Failed to play song:', error);
@@ -111,7 +105,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     try {
       await player.current.play();
-      setPlayerState(prev => ({ ...prev, isPlaying: true }));
+      // Player will update automatically via useAudioPlayerStatus hook
     } catch (error) {
       console.error('Failed to play audio:', error);
       throw error;
@@ -123,7 +117,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     try {
       await player.current.pause();
-      setPlayerState(prev => ({ ...prev, isPlaying: false }));
+      // Player will update automatically via useAudioPlayerStatus hook
     } catch (error) {
       console.error('Failed to pause audio:', error);
     }
@@ -137,11 +131,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       // We pause and reset position by seeking to 0
       await player.current.pause();
       await player.current.seekTo(0);
-      setPlayerState(prev => ({
-        ...prev,
-        isPlaying: false,
-        positionMillis: 0,
-      }));
+      // Player will update automatically via useAudioPlayerStatus hook
     } catch (error) {
       console.error('Failed to stop audio:', error);
     }
@@ -153,7 +143,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const positionSeconds = positionMillis / 1000;
       await player.current.seekTo(positionSeconds);
-      setPlayerState(prev => ({ ...prev, positionMillis }));
+      // Player will update automatically via useAudioPlayerStatus hook
     } catch (error) {
       console.error('Failed to seek audio:', error);
     }
