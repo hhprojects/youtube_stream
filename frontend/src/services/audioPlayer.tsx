@@ -1,5 +1,5 @@
-import React, { createContext, useContext, ReactNode, useRef, useEffect, useState } from 'react';
-import { useAudioPlayer, useAudioPlayerStatus, createAudioPlayer, AudioPlayer as ExpoAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import React, { createContext, useContext, ReactNode, useRef, useEffect } from 'react';
+import { useAudioPlayerStatus, createAudioPlayer, AudioPlayer as ExpoAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 export type PlaybackStatus = {
   isPlaying: boolean;
@@ -30,7 +30,9 @@ export const useGlobalAudio = () => {
 };
 
 export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const player = useRef<ExpoAudioPlayer | null>(null);
+  // Create an initial player immediately to avoid undefined errors
+  const initialPlayer = createAudioPlayer('', { updateInterval: 1000 });
+  const player = useRef<ExpoAudioPlayer>(initialPlayer);
   const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
 
   // Default state when no player exists
@@ -56,12 +58,12 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     })();
   }, []);
 
-  // Only use useAudioPlayerStatus hook when player.current is NOT null
-  const playerStatus = useAudioPlayerStatus(player.current || undefined);
+  // Use useAudioPlayerStatus hook with the player
+  const playerStatus = useAudioPlayerStatus(player.current);
 
   // Update playerState when playerStatus changes
   useEffect(() => {
-    if (playerStatus && player.current) {
+    if (playerStatus) {
       setPlayerState({
         isPlaying: playerStatus.playing || false,
         isBuffering: playerStatus.isBuffering || false,
@@ -70,23 +72,21 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         didJustFinish: playerStatus.didJustFinish || false,
       });
     }
-  }, [playerStatus, player.current]);
+  }, [playerStatus]);
 
   const playSong = async (url: string): Promise<void> => {
     try {
+      // Stop current player if playing
+      try {
+        await player.current.pause();
+      } catch (e) {
+        console.error('Error stopping old player:', e);
+      }
+
       // Create new player with source
       const newPlayer = createAudioPlayer(url, {
         updateInterval: 1000,
       });
-
-      if (player.current) {
-        try {
-          // Stop old player by pausing it
-          await player.current.pause();
-        } catch (e) {
-          console.error('Error stopping old player:', e);
-        }
-      }
 
       player.current = newPlayer;
       setCurrentUrl(url);
@@ -99,7 +99,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const play = async (): Promise<void> => {
-    if (!player.current) {
+    if (!currentUrl) {
       throw new Error('No audio loaded');
     }
 
@@ -113,8 +113,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const pause = async (): Promise<void> => {
-    if (!player.current) return;
-
     try {
       await player.current.pause();
       // Player will update automatically via useAudioPlayerStatus hook
@@ -124,8 +122,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const stop = async (): Promise<void> => {
-    if (!player.current) return;
-
     try {
       // In expo-audio v55, there's no stop() method
       // We pause and reset position by seeking to 0
@@ -138,8 +134,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const seek = async (positionMillis: number): Promise<void> => {
-    if (!player.current) return;
-
     try {
       const positionSeconds = positionMillis / 1000;
       await player.current.seekTo(positionSeconds);
