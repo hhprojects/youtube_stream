@@ -7,6 +7,7 @@ import {
   Image,
 } from 'react-native';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
+import { Song } from '../types';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface MiniPlayerProps {
@@ -32,6 +33,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Helper to safely get artist from Song
+  const getArtist = (song: Song): string => {
+    if (!song) return 'Unknown Artist';
+    return song.artist || 'Unknown Artist';
+  };
+
   return (
     <TouchableOpacity
       style={styles.container}
@@ -49,7 +56,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
           {playerState.currentSong.title}
         </Text>
         <Text style={styles.artist} numberOfLines={1}>
-          {playerState.currentSong.artist || playerState.currentSong.channel || 'Unknown Artist'}
+          {getArtist(playerState.currentSong)}
         </Text>
       </View>
 

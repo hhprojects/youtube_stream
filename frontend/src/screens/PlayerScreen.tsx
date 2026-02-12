@@ -41,7 +41,15 @@ export default function PlayerScreen({ route, navigation }: any) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const currentTrack = playerState.currentSong || video;
+    const currentTrack = playerState.currentSong || video;
+
+  // Helper to safely get artist/channel from SearchResult | Song
+  const getArtist = (track: SearchResult | Song | null | undefined): string => {
+    if (!track) return 'Unknown Artist';
+    if ('artist' in track) return track.artist;
+    if ('channel' in track) return track.channel;
+    return 'Unknown Artist';
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -63,7 +71,7 @@ export default function PlayerScreen({ route, navigation }: any) {
         </Text>
         
         <Text style={styles.trackArtist} numberOfLines={1}>
-          {currentTrack?.channel || currentTrack?.artist || 'Unknown Artist'}
+          {getArtist(currentTrack)}
         </Text>
       </View>
 

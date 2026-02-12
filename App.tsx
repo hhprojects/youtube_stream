@@ -11,6 +11,7 @@ const Tab = createBottomTabNavigator();
 
 const tabNavigator = () => (
   <Tab.Navigator
+    id="MainTabs"
     screenOptions={({ route }) => ({
       tabBarIcon: ({ focused, color, size }) => {
         let iconName: any;

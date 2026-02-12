@@ -13,6 +13,7 @@
     "backend": "node backend/server.js"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
     "@react-native-community/slider": "5.0.1",
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/native": "^7.0.0",

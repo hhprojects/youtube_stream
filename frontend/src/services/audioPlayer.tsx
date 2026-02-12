@@ -47,9 +47,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     (async () => {
       try {
         await setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: true,
+          playsInSilentMode: true,
         });
         console.log('Audio mode configured successfully');
       } catch (error) {
@@ -67,7 +65,8 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       if (player.current) {
         try {
-          player.current.stop();
+          // Stop old player by pausing it
+          await player.current.pause();
         } catch (e) {
           console.error('Error stopping old player:', e);
         }
@@ -84,12 +83,12 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       statusUpdateInterval.current = setInterval(() => {
         if (newPlayer) {
           try {
-            const status = newPlayer.getStatus();
+            // Directly access properties instead of calling getStatus()
             setPlayerState({
-              isPlaying: status.playing,
-              isBuffering: status.buffering || false,
-              positionMillis: status.currentTime * 1000,
-              durationMillis: status.duration ? status.duration * 1000 : 0,
+              isPlaying: newPlayer.playing,
+              isBuffering: newPlayer.isBuffering || false,
+              positionMillis: newPlayer.currentTime * 1000,
+              durationMillis: newPlayer.duration ? newPlayer.duration * 1000 : 0,
               didJustFinish: false,
             });
           } catch (error) {
@@ -134,7 +133,10 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (!player.current) return;
 
     try {
-      await player.current.stop();
+      // In expo-audio v55, there's no stop() method
+      // We pause and reset position by seeking to 0
+      await player.current.pause();
+      await player.current.seekTo(0);
       setPlayerState(prev => ({
         ...prev,
         isPlaying: false,
