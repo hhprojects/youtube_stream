@@ -41,7 +41,7 @@ export default function PlayerScreen({ route, navigation }: any) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-    const currentTrack = playerState.currentSong || video;
+  const currentTrack = playerState.currentSong || video;
 
   // Helper to safely get artist/channel from SearchResult | Song
   const getArtist = (track: SearchResult | Song | null | undefined): string => {
@@ -149,25 +149,30 @@ export default function PlayerScreen({ route, navigation }: any) {
             Up Next ({playerState.playlist.length})
           </Text>
           <ScrollView style={styles.queueList} nestedScrollEnabled>
-            {playerState.playlist.map((song, index) => (
-              <TouchableOpacity
-                key={song.id}
-                style={[
-                  styles.queueItem,
-                  index === playerState.currentIndex && styles.queueItemActive,
-                ]}
-              >
-                <Text
+            {playerState.playlist.map((song, index) => {
+              // Safety check: skip null songs or songs without id
+              if (!song || !song.id) return null;
+
+              return (
+                <TouchableOpacity
+                  key={song.id}
                   style={[
-                    styles.queueItemText,
-                    index === playerState.currentIndex && styles.queueItemTextActive,
+                    styles.queueItem,
+                    index === playerState.currentIndex && styles.queueItemActive,
                   ]}
-                  numberOfLines={1}
                 >
-                  {index + 1}. {song.title}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.queueItemText,
+                      index === playerState.currentIndex && styles.queueItemTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {index + 1}. {song.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       )}
