@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode, useRef, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useRef, useEffect, useState } from 'react';
 import { useAudioPlayer, useAudioPlayerStatus, createAudioPlayer, AudioPlayer as ExpoAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 export type PlaybackStatus = {
@@ -33,6 +33,15 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const player = useRef<ExpoAudioPlayer | null>(null);
   const [currentUrl, setCurrentUrl] = React.useState<string | null>(null);
 
+  // Default state when no player exists
+  const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
+    isPlaying: false,
+    isBuffering: false,
+    positionMillis: 0,
+    durationMillis: 0,
+    didJustFinish: false,
+  });
+
   // Setup audio mode
   useEffect(() => {
     (async () => {
@@ -47,24 +56,12 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     })();
   }, []);
 
-  // State for when player is ready (player.current is not null)
-  const [playerReady, setPlayerReady] = React.useState(false);
-
-  // Use the useAudioPlayerStatus hook - only when player exists
-  const playerStatus = useAudioPlayerStatus(playerReady ? player.current : null);
-
-  // Convert playerStatus to our PlaybackStatus format
-  const [playerState, setPlayerState] = React.useState<PlaybackStatus>({
-    isPlaying: false,
-    isBuffering: false,
-    positionMillis: 0,
-    durationMillis: 0,
-    didJustFinish: false,
-  });
+  // Only use useAudioPlayerStatus hook when player.current is NOT null
+  const playerStatus = useAudioPlayerStatus(player.current || undefined);
 
   // Update playerState when playerStatus changes
   useEffect(() => {
-    if (playerStatus) {
+    if (playerStatus && player.current) {
       setPlayerState({
         isPlaying: playerStatus.playing || false,
         isBuffering: playerStatus.isBuffering || false,
@@ -73,12 +70,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         didJustFinish: playerStatus.didJustFinish || false,
       });
     }
-  }, [playerStatus]);
-
-  // Set playerReady when player.current is set
-  useEffect(() => {
-    setPlayerReady(player.current !== null);
-  }, [player.current]);
+  }, [playerStatus, player.current]);
 
   const playSong = async (url: string): Promise<void> => {
     try {
