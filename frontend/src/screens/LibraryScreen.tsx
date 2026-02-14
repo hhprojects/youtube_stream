@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { getLibrary, deleteSong, Song } from '../services/api';
+import { API_BASE_URL } from '../config/apiConfig';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MiniPlayer } from '../components/MiniPlayer';
@@ -23,9 +24,17 @@ export default function LibraryScreen({ navigation }: any) {
     try {
       const library = await getLibrary();
       setSongs(library);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Library error:', error);
-      Alert.alert('Error', 'Failed to load library. Make sure the backend is running.');
+      const msg = error?.response?.data?.error || error?.message || 'Connection failed';
+      const testUrl = API_BASE_URL.replace(/\/$/, '') + '/library';
+      const debugInfo = __DEV__
+        ? `\n\nUsing: ${API_BASE_URL}\n\nTest in phone browser: ${testUrl}`
+        : '';
+      Alert.alert(
+        'Connection Error',
+        `Failed to load library: ${msg}${debugInfo}`
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);

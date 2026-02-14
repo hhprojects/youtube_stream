@@ -1,0 +1,167 @@
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+index 8d0bd25..ae7f407 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -32,6 +32,8 @@ import java.util.UUID
+ 
+ private const val PLAYBACK_STATUS_UPDATE = "playbackStatusUpdate"
+ private const val AUDIO_SAMPLE_UPDATE = "audioSampleUpdate"
++private const val ON_NEXT_TRACK = "onNextTrack"
++private const val ON_PREVIOUS_TRACK = "onPreviousTrack"
+ private const val SEEK_JUMP_INTERVAL_MS: Long = 10_000
+ 
+ @UnstableApi
+@@ -314,6 +316,22 @@ class AudioPlayer(
+     }
+   }
+ 
++  fun emitNextTrackEvent() {
++    playerScope.launch {
++      withContext(Dispatchers.Main) {
++        emit(ON_NEXT_TRACK, emptyMap<String, Any?>())
++      }
++    }
++  }
++
++  fun emitPreviousTrackEvent() {
++    playerScope.launch {
++      withContext(Dispatchers.Main) {
++        emit(ON_PREVIOUS_TRACK, emptyMap<String, Any?>())
++      }
++    }
++  }
++
+   override fun sharedObjectDidRelease() {
+     super.sharedObjectDidRelease()
+     appContext?.mainQueue?.launch {
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioRecords.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioRecords.kt
+index 092af43..c3a9d2b 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioRecords.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioRecords.kt
+@@ -94,7 +94,9 @@ enum class LockScreenButtons(val value: Int) : Enumerable {
+ 
+ class AudioLockScreenOptions(
+   @Field val showSeekForward: Boolean,
+-  @Field val showSeekBackward: Boolean
++  @Field val showSeekBackward: Boolean,
++  @Field val showNext: Boolean = false,
++  @Field val showPrevious: Boolean = false
+ ) : Record
+ 
+ enum class InterruptionMode(val value: String) : Enumerable {
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+index 04486e2..6b6e6b2 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
+@@ -68,6 +68,9 @@ class AudioControlsService : MediaSessionService() {
+       ACTION_SEEK_BACKWARD -> withPlayerOnAppThread { player ->
+         player.seekTo(player.currentPosition - SEEK_INTERVAL_MS)
+       }
++
++      ACTION_NEXT -> handleNextTrack()
++      ACTION_PREVIOUS -> handlePreviousTrack()
+     }
+ 
+     // Ensure channel exists and update current notification
+@@ -136,6 +139,17 @@ class AudioControlsService : MediaSessionService() {
+     val session = mediaSession ?: return
+     val customLayout = mutableListOf<CommandButton>()
+ 
++    // Add previous track button if enabled
++    if (currentOptions?.showPrevious == true) {
++      customLayout.add(
++        CommandButton.Builder(CommandButton.ICON_PREVIOUS)
++          .setDisplayName("Previous")
++          .setEnabled(true)
++          .setSessionCommand(SessionCommand(ACTION_PREVIOUS, Bundle.EMPTY))
++          .build()
++      )
++    }
++
+     // Add seek backward button if enabled
+     if (currentOptions?.showSeekBackward == true) {
+       customLayout.add(
+@@ -167,6 +181,17 @@ class AudioControlsService : MediaSessionService() {
+       )
+     }
+ 
++    // Add next track button if enabled
++    if (currentOptions?.showNext == true) {
++      customLayout.add(
++        CommandButton.Builder(CommandButton.ICON_NEXT)
++          .setDisplayName("Next")
++          .setEnabled(true)
++          .setSessionCommand(SessionCommand(ACTION_NEXT, Bundle.EMPTY))
++          .build()
++      )
++    }
++
+     session.setCustomLayout(customLayout)
+   }
+ 
+@@ -339,6 +364,8 @@ class AudioControlsService : MediaSessionService() {
+ 
+     const val ACTION_SEEK_FORWARD = "expo.modules.audio.action.SEEK_FORWARD"
+     const val ACTION_SEEK_BACKWARD = "expo.modules.audio.action.SEEK_REWIND"
++    const val ACTION_NEXT = "expo.modules.audio.action.NEXT"
++    const val ACTION_PREVIOUS = "expo.modules.audio.action.PREVIOUS"
+ 
+     const val SEEK_INTERVAL_MS = 10000L
+ 
+@@ -381,5 +408,13 @@ class AudioControlsService : MediaSessionService() {
+     fun clearSession() {
+       getInstance()?.clearSessionInternal()
+     }
++
++    fun handleNextTrack() {
++      getInstance()?.currentPlayer?.emitNextTrackEvent()
++    }
++
++    fun handlePreviousTrack() {
++      getInstance()?.currentPlayer?.emitPreviousTrackEvent()
++    }
+   }
+ }
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+index 839aaef..94fba65 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+@@ -35,6 +35,8 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+           MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+             .add(SessionCommand(AudioControlsService.ACTION_SEEK_BACKWARD, Bundle.EMPTY))
+             .add(SessionCommand(AudioControlsService.ACTION_SEEK_FORWARD, Bundle.EMPTY))
++            .add(SessionCommand(AudioControlsService.ACTION_NEXT, Bundle.EMPTY))
++            .add(SessionCommand(AudioControlsService.ACTION_PREVIOUS, Bundle.EMPTY))
+             .build()
+         )
+         .build()
+@@ -56,6 +58,12 @@ class AudioMediaSessionCallback : MediaSession.Callback {
+       AudioControlsService.ACTION_SEEK_BACKWARD -> {
+         session.player.seekTo(session.player.currentPosition - AudioControlsService.SEEK_INTERVAL_MS)
+       }
++      AudioControlsService.ACTION_NEXT -> {
++        AudioControlsService.handleNextTrack()
++      }
++      AudioControlsService.ACTION_PREVIOUS -> {
++        AudioControlsService.handlePreviousTrack()
++      }
+     }
+     return super.onCustomCommand(session, controller, command, args)
+   }
+diff --git a/node_modules/expo-audio/src/AudioConstants.ts b/node_modules/expo-audio/src/AudioConstants.ts
+index 72a157c..d1acecd 100644
+--- a/node_modules/expo-audio/src/AudioConstants.ts
++++ b/node_modules/expo-audio/src/AudioConstants.ts
+@@ -11,4 +11,12 @@ export type AudioLockScreenOptions = {
+    * Whether the seek backward button should be displayed on the lock screen.
+    */
+   showSeekBackward?: boolean;
++  /**
++   * Whether the next track button should be displayed on the lock screen.
++   */
++  showNext?: boolean;
++  /**
++   * Whether the previous track button should be displayed on the lock screen.
++   */
++  showPrevious?: boolean;
+ };

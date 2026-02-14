@@ -17,13 +17,21 @@ export interface Song {
   dateAdded?: Date;
 }
 
+export enum AppRepeatMode {
+  Off = 'off',
+  Track = 'track',
+  Queue = 'queue',
+}
+
 export interface PlayerState {
   isPlaying: boolean;
   currentSong: Song | null;
   playlist: Song[];
   currentIndex: number;
-  isLooping: boolean;
+  repeatMode: AppRepeatMode;
   isShuffled: boolean;
+  position: number;
+  duration: number;
 }
 
 export interface DownloadProgress {

@@ -9,14 +9,15 @@ import {
 import Slider from '@react-native-community/slider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
-import { SearchResult, Song } from '../types';
+import { SearchResult, Song, AppRepeatMode } from '../types';
 
 export default function PlayerScreen({ route, navigation }: any) {
   const video: SearchResult | Song = route.params?.video || route.params?.song;
-  const { playerState, togglePlayPause, playNext, playPrevious, seek, toggleLoop, toggleShuffle } = useMusicPlayer();
-  
+  const { playerState, togglePlayPause, playNext, playPrevious, seek, cycleRepeatMode, toggleShuffle, playSongAtIndex } = useMusicPlayer();
+
   const [sliderValue, setSliderValue] = useState(0);
   const [seeking, setSeeking] = useState(false);
+  const [queueExpanded, setQueueExpanded] = useState(false);
 
   useEffect(() => {
     if (!seeking) {
@@ -51,6 +52,20 @@ export default function PlayerScreen({ route, navigation }: any) {
     return 'Unknown Artist';
   };
 
+  const getRepeatIcon = (): { name: string; color: string; badge?: string } => {
+    switch (playerState.repeatMode) {
+      case AppRepeatMode.Track:
+        return { name: 'repeat', color: '#FF0000', badge: '1' };
+      case AppRepeatMode.Queue:
+        return { name: 'repeat', color: '#FF0000' };
+      case AppRepeatMode.Off:
+      default:
+        return { name: 'repeat-outline', color: '#999' };
+    }
+  };
+
+  const repeatIcon = getRepeatIcon();
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -65,11 +80,11 @@ export default function PlayerScreen({ route, navigation }: any) {
         <View style={styles.thumbnailPlaceholder}>
           <Ionicons name="musical-notes" size={80} color="#FF0000" />
         </View>
-        
+
         <Text style={styles.trackTitle} numberOfLines={2}>
           {currentTrack?.title || 'No track selected'}
         </Text>
-        
+
         <Text style={styles.trackArtist} numberOfLines={1}>
           {getArtist(currentTrack)}
         </Text>
@@ -133,47 +148,68 @@ export default function PlayerScreen({ route, navigation }: any) {
 
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={toggleLoop}
+          onPress={cycleRepeatMode}
         >
-          <Ionicons
-            name={playerState.isLooping ? 'repeat' : 'repeat-outline'}
-            size={24}
-            color={playerState.isLooping ? '#FF0000' : '#999'}
-          />
+          <View>
+            <Ionicons
+              name={repeatIcon.name as any}
+              size={24}
+              color={repeatIcon.color}
+            />
+            {repeatIcon.badge && (
+              <View style={styles.repeatBadgeContainer}>
+                <Text style={styles.repeatBadgeText}>{repeatIcon.badge}</Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
       {playerState.playlist.length > 0 && (
         <View style={styles.queueContainer}>
-          <Text style={styles.queueTitle}>
-            Up Next ({playerState.playlist.length})
-          </Text>
-          <ScrollView style={styles.queueList} nestedScrollEnabled>
-            {playerState.playlist.map((song, index) => {
-              // Safety check: skip null songs or songs without id
-              if (!song || !song.id) return null;
+          <TouchableOpacity
+            style={styles.queueHeader}
+            onPress={() => setQueueExpanded(!queueExpanded)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.queueTitle}>
+              Up Next ({playerState.playlist.length})
+            </Text>
+            <Ionicons
+              name={queueExpanded ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color="#666"
+            />
+          </TouchableOpacity>
 
-              return (
-                <TouchableOpacity
-                  key={song.id}
-                  style={[
-                    styles.queueItem,
-                    index === playerState.currentIndex && styles.queueItemActive,
-                  ]}
-                >
-                  <Text
+          {queueExpanded && (
+            <ScrollView style={styles.queueList} nestedScrollEnabled>
+              {playerState.playlist.map((song, index) => {
+                if (!song || !song.id) return null;
+
+                return (
+                  <TouchableOpacity
+                    key={song.id}
                     style={[
-                      styles.queueItemText,
-                      index === playerState.currentIndex && styles.queueItemTextActive,
+                      styles.queueItem,
+                      index === playerState.currentIndex && styles.queueItemActive,
                     ]}
-                    numberOfLines={1}
+                    onPress={() => playSongAtIndex(index)}
                   >
-                    {index + 1}. {song.title}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Text
+                      style={[
+                        styles.queueItemText,
+                        index === playerState.currentIndex && styles.queueItemTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {index + 1}. {song.title}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
       )}
     </ScrollView>
@@ -271,18 +307,40 @@ const styles = StyleSheet.create({
   playButtonActive: {
     backgroundColor: '#cc0000',
   },
+  repeatBadgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    backgroundColor: '#FF0000',
+    borderRadius: 6,
+    width: 12,
+    height: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  repeatBadgeText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: 'bold',
+  },
   queueContainer: {
     marginTop: 40,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  queueHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
   queueTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
   },
   queueList: {
-    maxHeight: 150,
+    maxHeight: 200,
+    marginTop: 10,
   },
   queueItem: {
     padding: 12,

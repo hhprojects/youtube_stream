@@ -35,7 +35,12 @@ app.post('/api/search', async (req, res) => {
   exec(command, (error, stdout, stderr) => {
     if (error) {
       console.error('Search error:', error);
-      return res.status(500).json({ error: 'Search failed' });
+      const errMsg = (error.message || stderr || '').toLowerCase();
+      const isNetworkError = errMsg.includes('getaddrinfo failed') || errMsg.includes('failed to resolve') || errMsg.includes('econnrefused');
+      const message = isNetworkError
+        ? 'Network error: Could not reach YouTube. Check your internet connection, DNS, and firewall.'
+        : 'Search failed';
+      return res.status(500).json({ error: message });
     }
 
     try {
@@ -78,7 +83,14 @@ app.post('/api/download', async (req, res) => {
   exec(command, (error, stdout, stderr) => {
     if (error) {
       console.error('Download error:', error);
-      return res.status(500).json({ error: 'Download failed' });
+      const errMsg = (error.message || stderr || '').toLowerCase();
+      let message = 'Download failed';
+      if (errMsg.includes('ffmpeg') || errMsg.includes('ffprobe')) {
+        message = 'FFmpeg is required for audio conversion. Install FFmpeg and add it to your PATH: https://ffmpeg.org/download.html';
+      } else if (errMsg.includes('getaddrinfo failed') || errMsg.includes('failed to resolve')) {
+        message = 'Network error: Could not reach YouTube. Check your internet connection.';
+      }
+      return res.status(500).json({ error: message });
     }
 
     // Get file info

@@ -1,9 +1,7 @@
 // API Configuration
-// Update this to match your backend server's address
-// - For development on same machine: 'http://localhost:3001/api'
-// - For testing on real device: Use your Pi's IP address, e.g., 'http://192.168.1.11:3001/api'
-// - For production: Use your backend server's domain/IP
+// Uses EXPO_PUBLIC_API_URL from .env or EAS build env; fallback for Tailscale.
+// - Tailscale IP 100.87.0.56 reaches the Pi from anywhere (phone must be on Tailscale).
+// - Override via EXPO_PUBLIC_API_URL in .env for local dev (e.g. localhost or LAN IP).
+const DEFAULT_API_URL = 'http://100.87.0.56:3001/api';
 
-export const API_BASE_URL = __DEV__
-  ? 'http://192.168.1.11:3001/api'  // Use Pi's IP for device testing
-  : 'http://192.168.1.11:3001/api'; // Production URL
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;

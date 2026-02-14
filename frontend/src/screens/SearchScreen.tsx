@@ -28,9 +28,10 @@ export default function SearchScreen({ navigation }: any) {
     try {
       const videos = await searchVideos(query);
       setResults(videos);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Search error:', error);
-      Alert.alert('Error', 'Failed to search. Please try again.');
+      const msg = error?.response?.data?.error || 'Failed to search. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -50,18 +51,18 @@ export default function SearchScreen({ navigation }: any) {
           },
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Download error:', error);
-      Alert.alert('Error', 'Failed to download. Please try again.');
+      const msg = error?.response?.data?.error || 'Failed to download. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setDownloading(null);
     }
   };
 
   const renderItem = ({ item }: { item: SearchResult }) => (
-    <TouchableOpacity
+    <View
       style={styles.item}
-      onPress={() => navigation.navigate('Player', { video: item })}
     >
       <Image
         source={{ uri: item.thumbnail || 'https://via.placeholder.com/120' }}
@@ -85,7 +86,7 @@ export default function SearchScreen({ navigation }: any) {
           <Ionicons name="download-outline" size={24} color="#FF0000" />
         )}
       </TouchableOpacity>
-    </TouchableOpacity>
+    </View>
   );
 
   return (

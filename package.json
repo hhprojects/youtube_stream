@@ -2,7 +2,7 @@
   "name": "youtube_stream",
   "version": "1.0.0",
   "description": "YouTube Music Streamer - Search, download, and play music",
-  "main": "index.js",
+  "main": "AppEntry.js",
   "engines": {
     "node": ">=18"
   },
@@ -10,7 +10,8 @@
     "start": "npx expo start",
     "android": "npx expo start --android",
     "ios": "npx expo start --ios",
-    "backend": "node backend/server.js"
+    "backend": "node backend/server.js",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -24,6 +25,7 @@
     "dotenv": "^16.4.7",
     "expo": "^54.0.33",
     "expo-audio": "~55.0.5",
+    "expo-dev-client": "~6.0.20",
     "expo-secure-store": "~15.0.8",
     "express": "^4.21.0",
     "react": "19.1.0",
@@ -34,6 +36,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
-    "@babel/runtime": "^7.26.0"
+    "@babel/runtime": "^7.26.0",
+    "patch-package": "^8.0.1"
   }
 }
