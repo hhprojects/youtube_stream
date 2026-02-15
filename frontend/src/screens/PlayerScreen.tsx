@@ -44,7 +44,6 @@ export default function PlayerScreen({ route, navigation }: any) {
 
   const currentTrack = playerState.currentSong || video;
 
-  // Helper to safely get artist/channel from SearchResult | Song
   const getArtist = (track: SearchResult | Song | null | undefined): string => {
     if (!track) return 'Unknown Artist';
     if ('artist' in track) return track.artist;

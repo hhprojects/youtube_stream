@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { getLibrary, deleteSong, Song } from '../services/api';
-import { API_BASE_URL } from '../config/apiConfig';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MiniPlayer } from '../components/MiniPlayer';
@@ -25,16 +24,8 @@ export default function LibraryScreen({ navigation }: any) {
       const library = await getLibrary();
       setSongs(library);
     } catch (error: any) {
-      console.error('Library error:', error);
       const msg = error?.response?.data?.error || error?.message || 'Connection failed';
-      const testUrl = API_BASE_URL.replace(/\/$/, '') + '/library';
-      const debugInfo = __DEV__
-        ? `\n\nUsing: ${API_BASE_URL}\n\nTest in phone browser: ${testUrl}`
-        : '';
-      Alert.alert(
-        'Connection Error',
-        `Failed to load library: ${msg}${debugInfo}`
-      );
+      Alert.alert('Connection Error', `Failed to load library: ${msg}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -67,13 +58,11 @@ export default function LibraryScreen({ navigation }: any) {
           onPress: async () => {
             try {
               await deleteSong(song.id);
-              // If deleted song is currently playing, stop it
               if (playerState.currentSong?.id === song.id) {
-                // Stop playback logic could go here
+                // Playback state will update when user navigates
               }
               fetchLibrary();
-            } catch (error) {
-              console.error('Delete error:', error);
+            } catch {
               Alert.alert('Error', 'Failed to delete song.');
             }
           },
@@ -251,6 +240,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContent: {
-    paddingBottom: 100, // Space for mini player
+    paddingBottom: 100,
   },
 });

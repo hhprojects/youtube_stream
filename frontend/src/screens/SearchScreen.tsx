@@ -8,8 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  StyleSheet,
 } from 'react-native';
-import { StyleSheet } from 'react-native';
 import { searchVideos, downloadAudio } from '../services/api';
 import { SearchResult } from '../types';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -29,7 +29,6 @@ export default function SearchScreen({ navigation }: any) {
       const videos = await searchVideos(query);
       setResults(videos);
     } catch (error: any) {
-      console.error('Search error:', error);
       const msg = error?.response?.data?.error || 'Failed to search. Please try again.';
       Alert.alert('Error', msg);
     } finally {
@@ -52,7 +51,6 @@ export default function SearchScreen({ navigation }: any) {
         ]
       );
     } catch (error: any) {
-      console.error('Download error:', error);
       const msg = error?.response?.data?.error || 'Failed to download. Please try again.';
       Alert.alert('Error', msg);
     } finally {
@@ -213,6 +211,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   listContent: {
-    paddingBottom: 100, // Space for mini player
+    paddingBottom: 100,
   },
 });

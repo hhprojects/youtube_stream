@@ -34,7 +34,6 @@ export const useGlobalAudio = () => {
   return context;
 };
 
-// Fisher-Yates shuffle, keeps the item at keepIndex at the front
 function shuffleArray<T>(arr: T[], keepIndex?: number): T[] {
   const result = [...arr];
   for (let i = result.length - 1; i > 0; i--) {
@@ -66,7 +65,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  // Refs for use inside event callbacks (avoids stale closures)
   const playlistRef = useRef<Song[]>([]);
   const currentIndexRef = useRef(0);
   const repeatModeRef = useRef<AppRepeatMode>(AppRepeatMode.Off);
@@ -78,39 +76,33 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
   useEffect(() => { positionRef.current = position; }, [position]);
 
-  // Configure audio mode for background playback
   useEffect(() => {
     async function setup() {
       try {
-        // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
         if (Platform.OS === 'android' && Platform.Version >= 33) {
           await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
           );
         }
-
         await setAudioModeAsync({
           shouldPlayInBackground: true,
           playsInSilentMode: true,
           interruptionMode: 'doNotMix',
         });
         setIsPlayerReady(true);
-        console.log('Audio mode setup complete');
-      } catch (error) {
-        console.error('Failed to setup audio mode:', error);
+      } catch {
+        // Audio mode setup failed; playback may be limited
       }
     }
     setup();
   }, []);
 
-  // Sync player.loop with repeat mode
   useEffect(() => {
     if (player) {
       player.loop = repeatMode === AppRepeatMode.Track;
     }
   }, [player, repeatMode]);
 
-  // Load and play a song (internal helper)
   const loadAndPlaySong = useCallback((song: Song, index: number) => {
     setCurrentSong(song);
     setCurrentIndex(index);
@@ -130,40 +122,32 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           showPrevious: true,
         });
       }
-    } catch (e) {
-      console.log('Lock screen controls not available:', e);
+    } catch {
+      // Lock screen controls not available
     }
   }, [player]);
 
-  // Listen for playback status updates (position, duration, end-of-track)
   useEffect(() => {
     const subscription = player.addListener('playbackStatusUpdate', (status) => {
       setIsPlaying(status.playing);
       setPosition(status.currentTime * 1000);
       setDuration(status.duration * 1000);
-
-      // Auto-advance when track finishes (Track repeat is handled by player.loop)
       if (status.didJustFinish && !handlingEndRef.current && repeatModeRef.current !== AppRepeatMode.Track) {
         handlingEndRef.current = true;
         const pl = playlistRef.current;
         const idx = currentIndexRef.current;
         const rm = repeatModeRef.current;
-
         if (idx < pl.length - 1) {
-          // Play next track
           loadAndPlaySong(pl[idx + 1], idx + 1);
         } else if (rm === AppRepeatMode.Queue) {
-          // Wrap around to first track
           loadAndPlaySong(pl[0], 0);
         }
-        // Off mode at end of playlist: just stop
       }
     });
 
     return () => subscription.remove();
   }, [player, loadAndPlaySong]);
 
-  // Listen for next/previous track events from notification controls
   const playNextRef = useRef<() => void>(() => {});
   const playPreviousRef = useRef<() => void>(() => {});
 
@@ -180,7 +164,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
   }, [player]);
 
-  // Start a new playlist (called from Library/Search screens)
   const playSongFromPlaylist = useCallback((song: Song, songPlaylist: Song[], index: number) => {
     if (!isPlayerReady) return;
 
@@ -200,7 +183,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     loadAndPlaySong(activePlaylist[activeIndex], activeIndex);
   }, [isPlayerReady, isShuffled, loadAndPlaySong]);
 
-  // Jump to a specific index in the current playlist (for queue item clicks)
   const playSongAtIndex = useCallback((index: number) => {
     if (playlist.length === 0 || index < 0 || index >= playlist.length) return;
     loadAndPlaySong(playlist[index], index);
@@ -230,7 +212,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const playPrevious = useCallback(() => {
     if (playlist.length === 0) return;
-    // If more than 3 seconds in, restart current track
     if (position > 3000) {
       player.seekTo(0);
       return;
@@ -247,7 +228,6 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     loadAndPlaySong(playlist[prevIndex], prevIndex);
   }, [playlist, currentIndex, position, repeatMode, player, loadAndPlaySong]);
 
-  // Keep refs in sync for notification event handlers
   useEffect(() => { playNextRef.current = playNext; }, [playNext]);
   useEffect(() => { playPreviousRef.current = playPrevious; }, [playPrevious]);
 

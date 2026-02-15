@@ -17,7 +17,6 @@ interface MiniPlayerProps {
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
   const { playerState, togglePlayPause, playNext } = useMusicPlayer();
 
-  // Don't show if no song is playing
   if (!playerState.currentSong) {
     return null;
   }
@@ -33,7 +32,6 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Helper to safely get artist from Song
   const getArtist = (song: Song): string => {
     if (!song) return 'Unknown Artist';
     return song.artist || 'Unknown Artist';
@@ -45,12 +43,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
       onPress={handlePress}
       activeOpacity={0.9}
     >
-      {/* Thumbnail placeholder */}
       <View style={styles.thumbnailContainer}>
         <Ionicons name="musical-notes" size={20} color="#FF0000" />
       </View>
 
-      {/* Song info */}
       <View style={styles.infoContainer}>
         <Text style={styles.title} numberOfLines={1}>
           {playerState.currentSong.title}
@@ -60,12 +56,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
         </Text>
       </View>
 
-      {/* Time display */}
       <Text style={styles.time}>
         {formatTime(playerState.position)} / {formatTime(playerState.duration)}
       </Text>
 
-      {/* Play/Pause button - stop propagation so it doesn't navigate */}
       <TouchableOpacity
         style={styles.playButton}
         onPress={(e) => {
@@ -80,7 +74,6 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({ navigation }) => {
         />
       </TouchableOpacity>
 
-      {/* Next button */}
       <TouchableOpacity
         style={styles.nextButton}
         onPress={(e) => {
@@ -106,7 +99,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    paddingBottom: 20, // Extra padding for safe area on iPhone X+
+    paddingBottom: 20,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

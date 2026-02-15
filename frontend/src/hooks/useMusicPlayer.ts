@@ -23,7 +23,6 @@ export const useMusicPlayer = () => {
     cycleRepeatMode,
   } = useGlobalAudio();
 
-  // Start a new playlist (from Library/Search screens)
   const playSong = useCallback((song: Song, songPlaylist?: Song[], index?: number) => {
     if (!isPlayerReady) return;
     playSongFromPlaylist(song, songPlaylist || [song], index ?? 0);
