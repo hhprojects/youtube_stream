@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import SearchScreen from './frontend/src/screens/SearchScreen';
 import LibraryScreen from './frontend/src/screens/LibraryScreen';
 import PlayerScreen from './frontend/src/screens/PlayerScreen';
+import ImportScreen from './frontend/src/screens/ImportScreen';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AudioProvider } from './frontend/src/services/audioPlayer';
 
@@ -31,6 +32,14 @@ const tabNavigator = () => (
     <Tab.Screen name="Search" component={SearchScreen} />
     <Tab.Screen name="Library" component={LibraryScreen} />
     <Tab.Screen name="Player" component={PlayerScreen} />
+    <Tab.Screen
+      name="Import"
+      component={ImportScreen}
+      options={{
+        tabBarButton: () => null,
+        headerShown: false,
+      }}
+    />
   </Tab.Navigator>
 );
 

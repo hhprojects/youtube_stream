@@ -2,6 +2,7 @@ import React, { createContext, useContext, ReactNode, useState, useEffect, useCa
 import { PermissionsAndroid, Platform } from 'react-native';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Song, AppRepeatMode } from '../types';
+import { ensureSongsDir } from './localLibrary';
 
 interface AudioContextType {
   isPlayerReady: boolean;
@@ -89,6 +90,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           playsInSilentMode: true,
           interruptionMode: 'doNotMix',
         });
+        await ensureSongsDir();
         setIsPlayerReady(true);
       } catch {
         // Audio mode setup failed; playback may be limited
@@ -109,7 +111,7 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     currentIndexRef.current = index;
     handlingEndRef.current = false;
 
-    player.replace({ uri: song.path });
+    player.replace({ uri: song.localPath || song.path });
     player.play();
 
     try {

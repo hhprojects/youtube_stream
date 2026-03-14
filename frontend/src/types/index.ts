@@ -13,8 +13,21 @@ export interface Song {
   artist: string;
   duration: string;
   path: string;
+  localPath?: string;
+  filename: string;
   size?: number;
-  dateAdded?: Date;
+  dateAdded?: string;
+}
+
+export interface PiSong {
+  id: string;
+  title: string;
+  artist: string;
+  duration: string;
+  filename: string;
+  downloadUrl: string;
+  size: number;
+  dateAdded: string;
 }
 
 export enum AppRepeatMode {

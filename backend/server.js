@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const { exec, execFile } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -22,13 +22,27 @@ app.use(cors());
 app.use(express.json());
 app.use('/downloads', express.static(DOWNLOAD_DIR));
 
+function parseArtistTitle(rawTitle) {
+  const separators = [' - ', ' — ', ' – ', ' | '];
+  for (const sep of separators) {
+    const idx = rawTitle.indexOf(sep);
+    if (idx > 0) {
+      return {
+        artist: rawTitle.substring(0, idx).trim(),
+        title: rawTitle.substring(idx + sep.length).trim(),
+      };
+    }
+  }
+  return { artist: 'Unknown', title: rawTitle };
+}
+
 app.post('/api/search', (req, res) => {
   const query = req.body?.query;
   if (!query || typeof query !== 'string') {
     return res.status(400).json({ error: 'Query is required' });
   }
   const searchArg = `ytsearch10:${query.trim()}`;
-  execFile('yt-dlp', [searchArg, '--dump-json', '--flat-playlist'], (error, stdout, stderr) => {
+  execFile('yt-dlp', [searchArg, '--dump-json', '--flat-playlist'], { timeout: 30000 }, (error, stdout, stderr) => {
     if (error) {
       const errMsg = (error.message || stderr || '').toLowerCase();
       const isNetworkError = errMsg.includes('getaddrinfo failed') || errMsg.includes('failed to resolve') || errMsg.includes('econnrefused');
@@ -66,8 +80,8 @@ app.post('/api/download', (req, res) => {
   }
   const safeTitle = String(title || videoId).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
   const outputPath = path.join(DOWNLOAD_DIR, `${safeTitle}.m4a`);
-  const command = `yt-dlp -x --audio-format m4a -o "${outputPath}" "https://www.youtube.com/watch?v=${videoId}"`;
-  exec(command, (error, stdout, stderr) => {
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  execFile('yt-dlp', ['-x', '--audio-format', 'm4a', '-o', outputPath, ytUrl], { timeout: 300000 }, (error, stdout, stderr) => {
     if (error) {
       const errMsg = (error.message || stderr || '').toLowerCase();
       let message = 'Download failed';
@@ -80,11 +94,13 @@ app.post('/api/download', (req, res) => {
     }
     try {
       const stats = fs.statSync(outputPath);
+      const parsed = parseArtistTitle(title || safeTitle);
       res.json({
         success: true,
         filename: `${safeTitle}.m4a`,
-        path: `http://${SERVER_URL}/downloads/${safeTitle}.m4a`,
-        title: title || safeTitle,
+        downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(safeTitle + '.m4a')}`,
+        title: parsed.title,
+        artist: parsed.artist,
         size: stats.size,
       });
     } catch (err) {
@@ -100,12 +116,15 @@ app.get('/api/library', (req, res) => {
       .map((file) => {
         const filePath = path.join(DOWNLOAD_DIR, file);
         const stats = fs.statSync(filePath);
+        const rawTitle = file.replace(/\.(m4a|mp3)$/, '').replace(/_/g, ' ');
+        const parsed = parseArtistTitle(rawTitle);
         return {
           id: file,
-          title: file.replace(/\.(m4a|mp3)$/, '').replace(/_/g, ' '),
-          artist: 'Unknown',
+          title: parsed.title,
+          artist: parsed.artist,
           duration: 'Unknown',
-          path: `http://${SERVER_URL}/downloads/${file}`,
+          filename: file,
+          downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(file)}`,
           size: stats.size,
           dateAdded: stats.mtime,
         };
