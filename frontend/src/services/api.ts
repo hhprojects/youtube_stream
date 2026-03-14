@@ -22,6 +22,7 @@ export const downloadAudio = async (videoId: string, title: string): Promise<Son
     artist: 'Unknown',
     duration: 'Unknown',
     path: response.data.path,
+    filename: response.data.filename,
     size: response.data.size,
   };
 };
