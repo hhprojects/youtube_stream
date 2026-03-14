@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/slider": "5.0.1",
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/native": "^7.0.0",
@@ -26,6 +27,7 @@
     "expo": "^54.0.33",
     "expo-audio": "~55.0.5",
     "expo-dev-client": "~6.0.20",
+    "expo-file-system": "~19.0.21",
     "expo-secure-store": "~15.0.8",
     "express": "^4.21.0",
     "react": "19.1.0",
