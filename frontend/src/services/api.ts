@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
-import { SearchResult, Song } from '../types';
+import { SearchResult, Song, PiSong } from '../types';
+import { downloadToDevice } from './localLibrary';
 
 export type { SearchResult, Song };
 
@@ -14,24 +15,33 @@ export const searchVideos = async (query: string): Promise<SearchResult[]> => {
   return response.data.results;
 };
 
-export const downloadAudio = async (videoId: string, title: string): Promise<Song> => {
-  const response = await api.post('/download', { videoId, title });
-  return {
-    id: response.data.filename,
-    title: response.data.title,
-    artist: 'Unknown',
-    duration: 'Unknown',
-    path: response.data.path,
-    filename: response.data.filename,
-    size: response.data.size,
-  };
+export const downloadAudio = async (
+  videoId: string,
+  title: string,
+  onProgress?: (progress: number) => void
+): Promise<Song> => {
+  // Step 1: Pi downloads from YouTube
+  const response = await api.post('/download', { videoId, title }, { timeout: 300000 });
+  const { filename, downloadUrl, title: parsedTitle, artist, size } = response.data;
+
+  // Step 2: Download file from Pi to device
+  const song = await downloadToDevice(
+    downloadUrl,
+    filename,
+    parsedTitle,
+    artist,
+    size,
+    onProgress
+  );
+
+  return song;
 };
 
-export const getLibrary = async (): Promise<Song[]> => {
+export const getPiLibrary = async (): Promise<PiSong[]> => {
   const response = await api.get('/library');
   return response.data.songs;
 };
 
-export const deleteSong = async (filename: string): Promise<void> => {
+export const deleteSongFromPi = async (filename: string): Promise<void> => {
   await api.delete(`/library/${encodeURIComponent(filename)}`);
 };
