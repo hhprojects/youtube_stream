@@ -57,7 +57,7 @@ export async function downloadToDevice(
     title,
     artist,
     duration: 'Unknown',
-    path: localPath,
+    path: downloadUrl,
     localPath,
     filename,
     size,

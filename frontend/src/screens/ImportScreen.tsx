@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PiSong } from '../types';
 import { getPiLibrary } from '../services/api';
 import { getLocalFilenames, downloadToDevice } from '../services/localLibrary';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function ImportScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const [piSongs, setPiSongs] = useState<PiSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -140,7 +142,7 @@ export default function ImportScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FF0000" />
           <Text style={styles.loadingText}>Connecting to Pi...</Text>
@@ -150,7 +152,7 @@ export default function ImportScreen({ navigation }: any) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
