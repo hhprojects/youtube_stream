@@ -19,6 +19,7 @@ export default function SearchScreen({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [results, setResults] = useState<SearchResult[]>([]);
 
   const handleSearch = async () => {
@@ -38,11 +39,14 @@ export default function SearchScreen({ navigation }: any) {
 
   const handleDownload = async (video: SearchResult) => {
     setDownloading(video.id);
+    setDownloadProgress(null);
     try {
-      const song = await downloadAudio(video.id, video.title);
+      await downloadAudio(video.id, video.title, (progress) => {
+        setDownloadProgress(progress);
+      });
       Alert.alert(
         'Success',
-        `"${video.title}" downloaded successfully!`,
+        `"${video.title}" downloaded to your device!`,
         [
           {
             text: 'OK',
@@ -55,6 +59,7 @@ export default function SearchScreen({ navigation }: any) {
       Alert.alert('Error', msg);
     } finally {
       setDownloading(null);
+      setDownloadProgress(null);
     }
   };
 
@@ -79,7 +84,14 @@ export default function SearchScreen({ navigation }: any) {
         disabled={downloading === item.id}
       >
         {downloading === item.id ? (
-          <ActivityIndicator size="small" color="#FF0000" />
+          <View style={styles.progressContainer}>
+            <ActivityIndicator size="small" color="#FF0000" />
+            {downloadProgress !== null && (
+              <Text style={styles.progressText}>
+                {Math.round(downloadProgress * 100)}%
+              </Text>
+            )}
+          </View>
         ) : (
           <Ionicons name="download-outline" size={24} color="#FF0000" />
         )}
@@ -198,6 +210,14 @@ const styles = StyleSheet.create({
   downloadButton: {
     padding: 8,
     marginLeft: 8,
+  },
+  progressContainer: {
+    alignItems: 'center',
+  },
+  progressText: {
+    fontSize: 10,
+    color: '#FF0000',
+    marginTop: 2,
   },
   emptyContainer: {
     flex: 1,
