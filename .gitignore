@@ -46,5 +46,13 @@ backend/downloads/*
 coverage/
 .nyc_output/
 
+# Worktrees
+.worktrees/
+
+# Planning files
+task_plan.md
+findings.md
+progress.md
+
 # Misc
 .cache/
