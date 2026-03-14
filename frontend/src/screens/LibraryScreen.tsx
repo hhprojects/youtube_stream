@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { StyleSheet } from 'react-native';
-import { getLibrary, deleteSong, Song } from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
+import { Song } from '../types';
+import { getLocalLibrary, deleteLocalSong } from '../services/localLibrary';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MiniPlayer } from '../components/MiniPlayer';
@@ -19,22 +21,23 @@ export default function LibraryScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const { playSong, playerState } = useMusicPlayer();
 
-  const fetchLibrary = async () => {
+  const fetchLibrary = useCallback(async () => {
     try {
-      const library = await getLibrary();
+      const library = await getLocalLibrary();
       setSongs(library);
     } catch (error: any) {
-      const msg = error?.response?.data?.error || error?.message || 'Connection failed';
-      Alert.alert('Connection Error', `Failed to load library: ${msg}`);
+      Alert.alert('Error', 'Failed to load local library');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchLibrary();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchLibrary();
+    }, [fetchLibrary])
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -49,7 +52,7 @@ export default function LibraryScreen({ navigation }: any) {
   const handleDelete = (song: Song) => {
     Alert.alert(
       'Delete Song',
-      `Are you sure you want to delete "${song.title}"?`,
+      `Are you sure you want to delete "${song.title}" from this device?\n\nThe song will remain on the Pi for re-downloading later.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -57,10 +60,7 @@ export default function LibraryScreen({ navigation }: any) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteSong(song.id);
-              if (playerState.currentSong?.id === song.id) {
-                // Playback state will update when user navigates
-              }
+              await deleteLocalSong(song.filename);
               fetchLibrary();
             } catch {
               Alert.alert('Error', 'Failed to delete song.');
@@ -120,9 +120,17 @@ export default function LibraryScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Library</Text>
-        <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
-          <Ionicons name="refresh" size={24} color="#FF0000" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Import')}
+            style={styles.importButton}
+          >
+            <Ionicons name="cloud-download-outline" size={24} color="#FF0000" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+            <Ionicons name="refresh" size={24} color="#FF0000" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {songs.length === 0 ? (
@@ -166,6 +174,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  importButton: {
+    padding: 8,
   },
   refreshButton: {
     padding: 8,
