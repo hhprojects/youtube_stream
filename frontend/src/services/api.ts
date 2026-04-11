@@ -41,7 +41,3 @@ export const getPiLibrary = async (): Promise<PiSong[]> => {
   const response = await api.get('/library');
   return response.data.songs;
 };
-
-export const deleteSongFromPi = async (filename: string): Promise<void> => {
-  await api.delete(`/library/${encodeURIComponent(filename)}`);
-};

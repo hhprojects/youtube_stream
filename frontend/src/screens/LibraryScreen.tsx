@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
-import { StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Song } from '../types';
 import { getLocalLibrary, deleteLocalSong } from '../services/localLibrary';
@@ -25,7 +25,7 @@ export default function LibraryScreen({ navigation }: any) {
     try {
       const library = await getLocalLibrary();
       setSongs(library);
-    } catch (error: any) {
+    } catch {
       Alert.alert('Error', 'Failed to load local library');
     } finally {
       setLoading(false);

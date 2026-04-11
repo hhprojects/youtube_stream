@@ -22,9 +22,6 @@
       "package": "com.youtubestreamer.app",
       "usesCleartextTraffic": true
     },
-    "plugins": [
-      "expo-secure-store"
-    ],
     "extra": {
       "eas": {
         "projectId": "e0c991b0-46dc-4cd8-8092-79e40f9b84f8"

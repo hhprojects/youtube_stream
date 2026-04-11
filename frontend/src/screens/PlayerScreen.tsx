@@ -9,10 +9,9 @@ import {
 import Slider from '@react-native-community/slider';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
-import { SearchResult, Song, AppRepeatMode } from '../types';
+import { AppRepeatMode } from '../types';
 
-export default function PlayerScreen({ route, navigation }: any) {
-  const video: SearchResult | Song = route.params?.video || route.params?.song;
+export default function PlayerScreen({ navigation }: any) {
   const { playerState, togglePlayPause, playNext, playPrevious, seek, cycleRepeatMode, toggleShuffle, playSongAtIndex } = useMusicPlayer();
 
   const [sliderValue, setSliderValue] = useState(0);
@@ -42,14 +41,7 @@ export default function PlayerScreen({ route, navigation }: any) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const currentTrack = playerState.currentSong || video;
-
-  const getArtist = (track: SearchResult | Song | null | undefined): string => {
-    if (!track) return 'Unknown Artist';
-    if ('artist' in track) return track.artist;
-    if ('channel' in track) return track.channel;
-    return 'Unknown Artist';
-  };
+  const currentTrack = playerState.currentSong;
 
   const getRepeatIcon = (): { name: string; color: string; badge?: string } => {
     switch (playerState.repeatMode) {
@@ -85,7 +77,7 @@ export default function PlayerScreen({ route, navigation }: any) {
         </Text>
 
         <Text style={styles.trackArtist} numberOfLines={1}>
-          {getArtist(currentTrack)}
+          {currentTrack?.artist || 'Unknown Artist'}
         </Text>
       </View>
 

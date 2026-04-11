@@ -92,8 +92,8 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         });
         await ensureSongsDir();
         setIsPlayerReady(true);
-      } catch {
-        // Audio mode setup failed; playback may be limited
+      } catch (err) {
+        console.warn('[audio] setup failed — background playback may be unavailable', err);
       }
     }
     setup();
@@ -124,8 +124,8 @@ export const AudioProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           showPrevious: true,
         });
       }
-    } catch {
-      // Lock screen controls not available
+    } catch (err) {
+      console.warn('[audio] lock-screen controls unavailable', err);
     }
   }, [player]);
 

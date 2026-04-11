@@ -1,249 +1,192 @@
-# YouTube Music Streamer 🎵
+# YouTube Streamer
 
-A React Native app for searching YouTube videos, downloading music, and managing a personal music library with a built-in music player.
+An offline-first React Native music player. A Raspberry Pi backend fetches audio from YouTube via `yt-dlp`, and the Expo app downloads those files onto the device for local playback — including lock-screen controls and background audio.
 
-## Project Structure
+## Architecture
+
+```
+  ┌────────────────┐   HTTP (cleartext)   ┌────────────────────┐
+  │  Expo app      │ ───────────────────▶ │  Pi backend        │
+  │  (Android)     │   /api/search         │  Express + yt-dlp  │
+  │                │   /api/download       │  192.168.1.11:3001 │
+  │  expo-audio    │ ◀─────────────────── │                    │
+  │  expo-file-sys │   m4a file (static)   │  /downloads/*.m4a  │
+  └────────────────┘                       └────────────────────┘
+         │
+         ▼
+  device file system   (documentDirectory/songs/*.m4a)
+  AsyncStorage         (library metadata: @local_library)
+```
+
+Two-step download flow:
+1. App calls `POST /api/download` → Pi runs `yt-dlp -x --audio-format m4a` → writes file to `backend/downloads/`.
+2. App uses `expo-file-system` `createDownloadResumable` to pull the file from `/downloads/<file>.m4a` into `documentDirectory/songs/` and records metadata in AsyncStorage.
+
+After that the app plays from the local file URI. The Pi copy is kept so the song can be re-imported on any device via the Import screen.
+
+## Tech stack
+
+| Layer | What |
+|---|---|
+| Runtime | Expo SDK 54, React Native 0.81.5, React 19.1, TypeScript 5.9 |
+| Audio | `expo-audio` 55.0.5 (patched — see `patches/`) |
+| Storage | `expo-file-system` 19 (legacy import), `@react-native-async-storage/async-storage` 2.2 |
+| Navigation | React Navigation 7 bottom tabs |
+| Backend | Node 18+, Express 4.21, `yt-dlp` (system binary), FFmpeg |
+| Build | EAS (dev/preview/production all produce APKs) |
+
+`newArchEnabled` is off. `expo-audio` is patched via `patch-package` to add lock-screen **Next / Previous** buttons on Android (`patches/expo-audio+55.0.5.patch`).
+
+## Project layout
 
 ```
 youtube_stream/
-├── backend/                 # Node.js + Express API server
-│   ├── server.js            # API endpoints
-│   └── downloads/           # Downloaded audio files
-├── frontend/                # React Native frontend
-│   ├── src/
-│   │   ├── screens/         # App screens
-│   │   ├── services/        # API client & audio player
-│   │   ├── hooks/          # Custom React hooks
-│   │   ├── components/      # Reusable components
-│   │   ├── types/          # TypeScript definitions
-│   │   ├── config/         # Configuration
-│   │   ├── navigation/      # Navigation setup
-│   │   └── assets/         # App assets
-│   ├── hooks/              # Git hooks
-│   └── routers/            # Backend routers (if any)
-├── App.tsx                 # Main app component
-├── index.js                # App entry point
-├── app.json                # React Native config
-├── metro.config.js          # Metro bundler config
-├── tsconfig.json           # TypeScript config
-├── package.json            # Dependencies and scripts
-└── .env.example           # Environment variables template
+├── App.tsx                        # Tab navigator + AudioProvider
+├── AppEntry.js                    # Expo entry
+├── backend/
+│   ├── server.js                  # Express API (search / download / library)
+│   └── downloads/                 # Pi-side m4a cache
+├── frontend/src/
+│   ├── screens/
+│   │   ├── SearchScreen.tsx       # YouTube search + single download
+│   │   ├── LibraryScreen.tsx      # On-device songs, play + delete
+│   │   ├── PlayerScreen.tsx       # Full player + queue dropdown
+│   │   └── ImportScreen.tsx       # Bulk pull from Pi → device
+│   ├── services/
+│   │   ├── audioPlayer.tsx        # AudioProvider (expo-audio + queue + shuffle + repeat)
+│   │   ├── api.ts                 # axios client → Pi
+│   │   └── localLibrary.ts        # File download + AsyncStorage metadata
+│   ├── hooks/useMusicPlayer.ts    # Thin facade over AudioProvider
+│   ├── components/MiniPlayer.tsx  # Persistent bottom bar
+│   ├── config/apiConfig.ts        # API_BASE_URL resolution
+│   └── types/index.ts             # Song, SearchResult, PiSong, AppRepeatMode
+├── patches/expo-audio+55.0.5.patch
+├── app.json / eas.json
+└── android/app/src/main/AndroidManifest.xml
 ```
 
 ## Features
 
-- **Search**: Find YouTube videos and music using yt-dlp
-- **Download**: Download audio-only versions of videos using yt-dlp
-- **Library**: View and manage downloaded songs
-- **Player**: Full-featured music player with play/pause, next/previous, loop, shuffle, and queue
-- **3 Tabs**: Search, Library, and Player tabs with easy navigation
+- **Search** — `ytsearch10:` via `yt-dlp` on the Pi, returns 10 results with thumbnails.
+- **Download** — one-tap download with live progress (`%` of bytes written).
+- **Bulk import** — Library → cloud icon opens ImportScreen, lists Pi songs that aren't on the device, multi-select + download.
+- **Local library** — persisted in AsyncStorage, file stored under `documentDirectory/songs/`. Delete removes the local copy only (the Pi copy stays).
+- **Player** — full controls, scrubbing slider, 3-state repeat (off / one / queue), shuffle with position preservation, expandable up-next list.
+- **Mini player** — persistent bottom bar on Search / Library with play-pause, next, time.
+- **Background + lock screen** — `shouldPlayInBackground: true`, Android media notification with play/pause + next/previous (via the patch).
 
-## Tech Stack
+## Setup
 
-- **Frontend**: React Native 0.83.1 (latest, requires Node.js >= 18)
-- **Navigation**: React Navigation 7.x (Bottom Tabs)
-- **Backend**: Node.js + Express 4.21.0
-- **YouTube API**: yt-dlp 2025.04.30
-- **State Management**: React hooks (useState)
-- **Audio Playback**: expo-av 16.0.8
-- **Icons**: React Native Vector Icons 10.0.0
-- **HTTP Client**: Axios 1.8.0
-
-**Note**: React Native 0.83.1 is the latest version with New Architecture, fully compatible with Node.js v25.6.0.
-
-## Setup Instructions
-
-### Prerequisites
-
-1. **Install Node.js dependencies**
-   ```bash
-   cd youtube_stream
-   npm install
-   ```
-
-   **Note**: Requires Node.js >= 18 (fully compatible with Node.js v25.6.0)
-
-   **⚠️ Windows Users**: If you see engine warnings, you may need to upgrade Node.js. See `QUICK_UPGRADE.md` for fast guide or `UPGRADE_NODE_WINDOWS.md` for detailed instructions.
-
-2. **Install yt-dlp** (YouTube downloader)
-   ```bash
-   sudo apt install -y yt-dlp
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-### Running the Backend
-
-The backend API server is required for the app to function. Start it with:
+### Pi / backend
 
 ```bash
-npm run backend
+# On the Pi (or anywhere running the backend)
+sudo apt install -y yt-dlp ffmpeg   # both required
+npm install
+npm run backend                     # listens on 0.0.0.0:3001
 ```
 
-The backend will run on `http://localhost:3001` (or configured port) and serves:
-- `/api/search` - YouTube search endpoint
-- `/api/download` - Download audio endpoint
-- `/api/library` - List downloaded songs
-- `/downloads/` - Serve downloaded audio files
+Backend env vars (optional, all have defaults):
 
-### Running the React Native App
+| Var | Default | Purpose |
+|---|---|---|
+| `BACKEND_PORT` | `3001` | Listen port |
+| `SERVER_URL` | `100.87.0.56:3001` | Host:port embedded in `downloadUrl` responses — must be reachable from the phone |
+| `DOWNLOAD_DIR` | `./backend/downloads` | Where yt-dlp writes files |
+| `DOWNLOADS_MAX_BYTES` | `2147483648` (2 GiB) | Max total size of `DOWNLOAD_DIR`. On startup and after each download, oldest files are pruned until total is under the cap. |
 
-#### Start Metro Bundler
+### App / frontend
+
+Because this is an EAS-built app (not Expo Go), background audio and the lock-screen patch only work in a dev client or standalone build.
+
 ```bash
-npm start
+npm install                         # runs patch-package via postinstall
+npx expo prebuild                   # if android/ needs regenerating
+eas build --profile development --platform android
 ```
 
-#### Run on Android
-```bash
-npm run android
+API URL resolution (`frontend/src/config/apiConfig.ts`):
+
+```ts
+API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://100.87.0.56:3001/api';
 ```
 
-#### Run on iOS (requires Mac)
-```bash
-npm run ios
-```
+Set `EXPO_PUBLIC_API_URL` at build time (e.g., in `eas.json` env or `.env.local`) to point at your Pi. The baked-in default is a Tailscale IP and will not work on a normal LAN without Tailscale installed on the device.
 
-## End-to-End Flow
+### Android cleartext
 
-1. **Search**: Use the Search tab to find music on YouTube
-2. **Download**: Tap the download button on any search result
-3. **Library**: View all downloaded songs in the Library tab
-4. **Play**: Tap any song to play it in the Player tab
-5. **Controls**: Use play/pause, next/previous, loop, and shuffle controls
+`app.json` sets `android.usesCleartextTraffic: true` and `AndroidManifest.xml` mirrors it — the Pi is served over plain HTTP on the LAN. Do not ship this app to a public network without adding TLS.
 
-## Current Status
+## API
 
-- ✅ Backend API server (Express + yt-dlp integration)
-- ✅ YouTube search functionality
-- ✅ Audio download (m4a format)
-- ✅ Local library management
-- ✅ Audio playback with controls
-- ✅ Playlist/queue support
-- ✅ Loop and shuffle modes
-- ✅ Environment variables support
-- ✅ Frontend/Backend separation
-
-## API Endpoints
-
-### POST /api/search
-Search YouTube videos.
-
-Request:
+### `POST /api/search`
 ```json
-{
-  "query": "song name"
-}
+// request
+{ "query": "string" }
+// response
+{ "results": [{ "id", "title", "channel", "duration", "url", "thumbnail" }] }
 ```
 
-Response:
+### `POST /api/download`
 ```json
-{
-  "results": [
-    {
-      "id": "videoId",
-      "title": "Video Title",
-      "channel": "Channel Name",
-      "duration": 180,
-      "url": "https://youtube.com/watch?v=...",
-      "thumbnail": "https://i.ytimg.com/vi/..."
-    }
-  ]
-}
-```
-
-### POST /api/download
-Download audio from a YouTube video.
-
-Request:
-```json
-{
-  "videoId": "videoId",
-  "title": "Video Title"
-}
-```
-
-Response:
-```json
+// request
+{ "videoId": "string(^[\\w-]{1,20}$)", "title": "string" }
+// response
 {
   "success": true,
-  "filename": "song_name.m4a",
-  "path": "http://localhost:3001/downloads/song_name.m4a",
-  "title": "Song Name",
+  "filename": "Safe_Title.m4a",
+  "downloadUrl": "http://<SERVER_URL>/downloads/Safe_Title.m4a",
+  "title": "Parsed title",
+  "artist": "Parsed artist",
   "size": 3166078
 }
 ```
 
-### GET /api/library
-List all downloaded songs.
-
-Response:
+### `GET /api/library`
+Lists every `.m4a`/`.mp3` under `DOWNLOAD_DIR`, newest first. Used by ImportScreen.
 ```json
-{
-  "songs": [
-    {
-      "id": "song_name.m4a",
-      "title": "Song Name",
-      "artist": "Unknown",
-      "duration": "Unknown",
-      "path": "http://localhost:3001/downloads/song_name.m4a",
-      "size": 3166078,
-      "dateAdded": "2026-01-31T11:18:13.000Z"
-    }
-  ]
-}
+{ "songs": [{ "id", "title", "artist", "duration": "Unknown",
+              "filename", "downloadUrl", "size", "dateAdded" }] }
 ```
 
-### DELETE /api/library/:filename
-Delete a song from the library.
+### `DELETE /api/library/:filename`
+Filename is sanitised with `path.basename` + strict regex before deletion. The app does **not** currently call this endpoint — delete is device-only, and the Pi copy is kept so the song can be re-imported later.
 
-Response:
-```json
-{
-  "success": true
-}
-```
+### `GET /downloads/*`
+Static file server (`express.static`) for the m4a cache. Unauthenticated — assume the Pi is on a trusted network. CORS is restricted to `localhost`, `127.0.0.1`, `192.168.*`, and `100.*` (Tailscale). React Native clients don't send an `Origin` header so the app itself is unaffected; the whitelist only matters for browsers.
 
-## Environment Variables
+## Scripts
 
-Create a `.env` file from `.env.example`:
+| Command | What |
+|---|---|
+| `npm start` | Expo dev server |
+| `npm run android` | Expo dev server, open Android |
+| `npm run ios` | Expo dev server, open iOS |
+| `npm run backend` | Start the Pi backend (`node backend/server.js`) |
+| `npm run typecheck` | `tsc --noEmit` — verify the whole codebase compiles |
+| `npm run lint` | `expo lint` with the Node env layered for `backend/**/*.js` |
+| `npm test` | `node --test backend/**/*.test.js` — backend unit tests |
 
-```bash
-cp .env.example .env
-```
+Run `npm run typecheck && npm run lint && npm test` before any EAS build.
 
-Available variables:
-- `REACT_APP_API_URL` - Backend API URL for frontend
-- `BACKEND_PORT` - Backend server port (default: 3001)
-- `DOWNLOAD_DIR` - Download directory path (default: ./backend/downloads)
+## Known issues / leftover items
 
-## TODO / Future Enhancements
+### Intentional choices (not bugs)
+- ImportScreen is registered as a hidden tab (`tabBarButton: () => null`) and reached via the cloud-download button on Library. Unusual, but deliberate.
+- Delete only removes the local copy; the Pi keeps the original so the song can be re-imported. The confirm dialog says so.
+- Android `usesCleartextTraffic: true` is intentional — the Pi is on HTTP on a trusted network. Do not ship this app to the public internet without adding TLS.
+- `frontend/src/config/apiConfig.ts` defaults to the Tailscale IP `100.87.0.56:3001`. Override with `EXPO_PUBLIC_API_URL` at build time for non-Tailscale builds. The backend's `SERVER_URL` default matches.
 
-- [ ] Add download progress indicators
-- [ ] Implement persistent local storage for music library metadata
-- [ ] Add playlist creation/management
-- [ ] Support for multiple audio formats
-- [ ] Audio visualization
-- [ ] Lyrics integration
-- [ ] Share functionality
-- [ ] Background audio support
+### Minor / left as-is
+- `patches/expo-audio+55.0.5.patch` is locked to the exact version `55.0.5`. Bumping `expo-audio` will require regenerating the patch (edit in `node_modules/expo-audio`, then `npx patch-package expo-audio`).
+- `shuffleArray` uses reference equality to pin the current track when toggling shuffle — fine today, would be fragile if the playlist were ever cloned deeply upstream.
+- `LibraryScreen` refreshes via `useFocusEffect`, so the Search→download→navigate flow has a cosmetic race if the user taps fast. Catches up on the next focus.
+- `yt-dlp` version is not pinned; the Pi uses whatever `apt` or `pip` gave it. YouTube breaks older versions regularly — run `yt-dlp -U` (or a `pip install -U yt-dlp` cron) monthly.
+- No CI. Every build is manual. The `typecheck`/`lint`/`test` scripts are there for you to run locally before each build.
 
-## Documentation
+## Development notes
 
-- **README.md** - This file
-- **QUICKSTART.md** - Quick start guide
-- **LOCAL_DEV.md** - Local machine development with emulator
-- **STATUS.md** - Detailed project status and to-do list
-- **WARNINGS_FIX.md** - Installation warnings and fixes
-- **DEPENDENCY_UPDATE.md** - Dependency update history
-
-## GitHub Repository
-
-https://github.com/hhprojects/youtube_stream
-
----
-
-Built with ❤️ for music lovers
+- The app was previously streamed-from-Pi and was migrated to download-first for offline playback. The memory of that transition is in the commit log (`feat: switch library to local storage with import button`, `feat: add offline downloads`).
+- `react-native-track-player` was tried and abandoned — it is not compatible with Expo SDK 54 (Kotlin / Media3 mismatch). Do not re-try it.
+- `useAudioPlayerStatus` from `expo-audio` used to be buggy; the current code uses `player.addListener('playbackStatusUpdate', ...)` manually.
+- Background playback only works in an EAS dev client or standalone build — Expo Go is not enough.

@@ -9,8 +9,9 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
 const HOST = '0.0.0.0';
-const SERVER_URL = process.env.SERVER_URL || '192.168.1.11:3001';
+const SERVER_URL = process.env.SERVER_URL || '100.87.0.56:3001';
 const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || path.join(__dirname, 'downloads');
+const DOWNLOADS_MAX_BYTES = Number(process.env.DOWNLOADS_MAX_BYTES) || 2 * 1024 * 1024 * 1024;
 
 const YOUTUBE_ID_REGEX = /^[\w-]{1,20}$/;
 
@@ -18,7 +19,51 @@ if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 }
 
-app.use(cors());
+function pruneDownloads(dir = DOWNLOAD_DIR, maxBytes = DOWNLOADS_MAX_BYTES) {
+  try {
+    const files = fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.m4a') || f.endsWith('.mp3'))
+      .map((f) => {
+        const p = path.join(dir, f);
+        const s = fs.statSync(p);
+        return { name: f, path: p, size: s.size, mtime: s.mtimeMs };
+      });
+    let total = files.reduce((sum, f) => sum + f.size, 0);
+    const removed = [];
+    if (total <= maxBytes) return { removed, totalAfter: total };
+    files.sort((a, b) => a.mtime - b.mtime);
+    for (const f of files) {
+      if (total <= maxBytes) break;
+      try {
+        fs.unlinkSync(f.path);
+        total -= f.size;
+        removed.push(f.name);
+        console.log(`[prune] removed ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`);
+      } catch (err) {
+        console.warn(`[prune] failed to remove ${f.name}`, err.message);
+      }
+    }
+    return { removed, totalAfter: total };
+  } catch (err) {
+    console.warn('[prune] scan failed', err.message);
+    return { removed: [], totalAfter: 0 };
+  }
+}
+
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/localhost(:\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
+  /^https?:\/\/100\.\d+\.\d+\.\d+(:\d+)?$/,
+];
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGIN_PATTERNS.some((re) => re.test(origin))) return cb(null, true);
+    return cb(new Error('Origin not allowed'));
+  },
+}));
 app.use(express.json());
 app.use('/downloads', express.static(DOWNLOAD_DIR));
 
@@ -67,7 +112,7 @@ app.post('/api/search', (req, res) => {
         })
         .filter((item) => item.id && item.title);
       res.json({ results });
-    } catch (parseError) {
+    } catch {
       res.status(500).json({ error: 'Failed to parse results' });
     }
   });
@@ -103,7 +148,8 @@ app.post('/api/download', (req, res) => {
         artist: parsed.artist,
         size: stats.size,
       });
-    } catch (err) {
+      pruneDownloads();
+    } catch {
       res.status(500).json({ error: 'Failed to access downloaded file' });
     }
   });
@@ -131,7 +177,7 @@ app.get('/api/library', (req, res) => {
       })
       .sort((a, b) => b.dateAdded - a.dateAdded);
     res.json({ songs: files });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to list library' });
   }
 });
@@ -149,12 +195,18 @@ app.delete('/api/library/:filename', (req, res) => {
     }
     fs.unlinkSync(filePath);
     res.json({ success: true });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to delete file' });
   }
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
-  console.log(`Server accessible at http://${SERVER_URL}`);
-});
+if (require.main === module) {
+  pruneDownloads();
+  app.listen(PORT, HOST, () => {
+    console.log(`Server running on http://${HOST}:${PORT}`);
+    console.log(`Server accessible at http://${SERVER_URL}`);
+    console.log(`Downloads cap: ${(DOWNLOADS_MAX_BYTES / 1024 / 1024 / 1024).toFixed(1)} GB`);
+  });
+}
+
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads };

@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
 } from 'react-native';
 import { useMusicPlayer } from '../hooks/useMusicPlayer';
 import { Song } from '../types';

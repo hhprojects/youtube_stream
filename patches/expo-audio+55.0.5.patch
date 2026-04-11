@@ -148,6 +148,40 @@ index 839aaef..94fba65 100644
      }
      return super.onCustomCommand(session, controller, command, args)
    }
+diff --git a/node_modules/expo-audio/build/AudioConstants.d.ts b/node_modules/expo-audio/build/AudioConstants.d.ts
+index a290f9a..df4b29c 100644
+--- a/node_modules/expo-audio/build/AudioConstants.d.ts
++++ b/node_modules/expo-audio/build/AudioConstants.d.ts
+@@ -10,5 +10,13 @@ export type AudioLockScreenOptions = {
+      * Whether the seek backward button should be displayed on the lock screen.
+      */
+     showSeekBackward?: boolean;
++    /**
++     * Whether the next track button should be displayed on the lock screen.
++     */
++    showNext?: boolean;
++    /**
++     * Whether the previous track button should be displayed on the lock screen.
++     */
++    showPrevious?: boolean;
+ };
+ //# sourceMappingURL=AudioConstants.d.ts.map
+\ No newline at end of file
+diff --git a/node_modules/expo-audio/build/AudioModule.types.d.ts b/node_modules/expo-audio/build/AudioModule.types.d.ts
+index b30a75a..baef778 100644
+--- a/node_modules/expo-audio/build/AudioModule.types.d.ts
++++ b/node_modules/expo-audio/build/AudioModule.types.d.ts
+@@ -209,6 +209,10 @@ export type AudioEvents = {
+     playbackStatusUpdate(status: AudioStatus): void;
+     /** Fired when audio sampling is enabled and new sample data is available. */
+     audioSampleUpdate(data: AudioSample): void;
++    /** Fired when the lock-screen next-track button is tapped (added by patch). */
++    onNextTrack(): void;
++    /** Fired when the lock-screen previous-track button is tapped (added by patch). */
++    onPreviousTrack(): void;
+ };
+ export declare class AudioRecorder extends SharedObject<RecordingEvents> {
+     /**
 diff --git a/node_modules/expo-audio/src/AudioConstants.ts b/node_modules/expo-audio/src/AudioConstants.ts
 index 72a157c..d1acecd 100644
 --- a/node_modules/expo-audio/src/AudioConstants.ts
