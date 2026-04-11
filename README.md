@@ -77,6 +77,8 @@ youtube_stream/
 
 ## Setup
 
+> For the full end-to-end walkthrough (Pi install, systemd service, EAS build, installing the APK on your phone), see [`docs/setup.md`](docs/setup.md). The sections below are the short version.
+
 ### Pi / backend
 
 ```bash
