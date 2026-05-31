@@ -1,0 +1,42 @@
+# ─── Backend (Node) ─────────────────────────────────────────────
+node_modules/
+.env
+.env.local
+
+# Downloaded audio is a runtime cache and must never be versioned.
+backend/downloads/*
+!backend/downloads/.gitkeep
+
+# ─── Android (Gradle / Android Studio) ──────────────────────────
+.gradle/
+build/
+/android/local.properties
+/android/.idea/
+/android/captures/
+/android/.externalNativeBuild/
+/android/.cxx/
+*.iml
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# ─── Logs ───────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ─── OS / editor ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+*.orig
+*~
+*.swp
+
+# ─── Misc ───────────────────────────────────────────────────────
+coverage/
+.cache/
+
+# ─── Local-only (kept on disk, not published to GitHub) ─────────
+# Design spec + implementation plan stay local; they are not tracked.
+docs/
