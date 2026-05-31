@@ -20,6 +20,11 @@ build/
 *.aab
 *.keystore
 !debug.keystore
+# Kotlin 2.x build-session data
+.kotlin/
+# Extra signing-secret coverage (*.keystore already handled above)
+*.jks
+keystore.properties
 
 # ─── Logs ───────────────────────────────────────────────────────
 *.log
