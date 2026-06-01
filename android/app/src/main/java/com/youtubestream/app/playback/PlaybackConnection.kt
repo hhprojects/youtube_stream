@@ -91,12 +91,15 @@ class PlaybackConnection(
             currentMediaId = c.currentMediaItem?.mediaId,
             title = md.title?.toString().orEmpty(),
             artist = md.artist?.toString().orEmpty(),
+            artworkUri = md.artworkUri?.toString(),
             positionMs = c.currentPosition.coerceAtLeast(0),
             durationMs = c.duration.coerceAtLeast(0),
             repeatMode = RepeatModeMapper.toApp(c.repeatMode),
             shuffleEnabled = c.shuffleModeEnabled,
             hasNext = c.hasNextMediaItem(),
             hasPrevious = c.hasPreviousMediaItem(),
+            queue = c.snapshotQueue(),
+            currentIndex = c.currentMediaItemIndex,
         )
     }
 
@@ -128,6 +131,16 @@ class PlaybackConnection(
         c.repeatMode = RepeatModeMapper.toPlayer(RepeatModeMapper.next(RepeatModeMapper.toApp(c.repeatMode)))
     }
 }
+
+private fun MediaController.snapshotQueue(): List<QueueItem> =
+    (0 until mediaItemCount).map { i ->
+        val item = getMediaItemAt(i)
+        QueueItem(
+            mediaId = item.mediaId,
+            title = item.mediaMetadata.title?.toString().orEmpty(),
+            artist = item.mediaMetadata.artist?.toString().orEmpty(),
+        )
+    }
 
 private fun PlayableTrack.toMediaItem(): MediaItem =
     MediaItem.Builder()
