@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// Server URL: set PI_SERVER_URL in local.properties (gitignored) for local dev or the Pi.
+// Falls back to the scrubbed placeholder so committed code carries no real IP.
+val piServerUrl: String = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}.getProperty("PI_SERVER_URL") ?: "http://<PI_IP>:3001"
 
 android {
     namespace = "com.youtubestream.app"
@@ -21,6 +30,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "DEFAULT_SERVER_URL", "\"$piServerUrl\"")
     }
 
     buildTypes {
@@ -38,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
