@@ -22,8 +22,8 @@ class DownloadRepository(
     private val dao: LibraryDao,
     private val songsDir: File,             // filesDir/songs
     private val baseUrl: () -> String,      // resolves a relative downloadUrl (real ones are absolute)
-) {
-    fun download(videoId: String, title: String): Flow<DownloadState> = flow {
+) : Downloader {
+    override fun download(videoId: String, title: String): Flow<DownloadState> = flow {
         val meta = api.download(DownloadRequestDto(videoId, title))
         val url = if (meta.downloadUrl.startsWith("http")) meta.downloadUrl
         else baseUrl().removeSuffix("/") + meta.downloadUrl

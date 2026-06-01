@@ -30,7 +30,7 @@ import com.youtubestream.app.ui.appViewModel
 
 @Composable
 fun SearchScreen(modifier: Modifier = Modifier) {
-    val vm = appViewModel { SearchViewModel(it.searchRepository) }
+    val vm = appViewModel { SearchViewModel(it.searchRepository, it.downloadRepository, it.libraryRepository) }
     val state by vm.state.collectAsState()
     var query by remember { mutableStateOf("") }
 
