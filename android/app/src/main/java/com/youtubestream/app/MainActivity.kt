@@ -37,11 +37,14 @@ class MainActivity : ComponentActivity() {
         connection = PlaybackConnection(applicationContext, lifecycleScope)
         connection.connect()
 
+        val container = (application as App).container
+
         setContent {
             YoutubeStreamTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     DebugPlaybackScreen(
                         connection = connection,
+                        container = container,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
