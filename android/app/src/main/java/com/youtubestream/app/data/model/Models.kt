@@ -11,6 +11,16 @@ data class SearchResult(
     val thumbnailUrl: String?,
 )
 
+/** A song on the Pi (for the Import screen). No real duration — the Pi reports the string 'Unknown'. */
+data class PiSong(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val filename: String,
+    val downloadUrl: String,
+    val size: Long,
+)
+
 /** Progress of a two-step download (metadata POST, then file stream). */
 sealed interface DownloadState {
     data class InProgress(val fraction: Float) : DownloadState
