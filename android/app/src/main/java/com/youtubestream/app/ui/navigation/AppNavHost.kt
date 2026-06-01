@@ -1,6 +1,5 @@
 package com.youtubestream.app.ui.navigation
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -15,7 +14,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -26,6 +24,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.youtubestream.app.di.AppContainer
 import com.youtubestream.app.ui.debug.DebugPlaybackScreen
+import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
 
@@ -66,15 +65,10 @@ fun AppNavHost(container: AppContainer) {
         NavHost(nav, startDestination = Dest.Search.route, modifier = Modifier.padding(padding)) {
             composable(Dest.Search.route) { SearchScreen(Modifier.fillMaxSize()) }
             composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
-            composable(Dest.Library.route) { Stub("Library — Plan 4") }
+            composable(Dest.Library.route) { LibraryScreen(Modifier.fillMaxSize()) }
             composable(Dest.Player.route) {
                 DebugPlaybackScreen(connection = connection, container = container, modifier = Modifier.fillMaxSize())
             }
         }
     }
-}
-
-@Composable
-private fun Stub(text: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text) }
 }
