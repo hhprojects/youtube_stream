@@ -7,13 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.youtubestream.app.playback.PlaybackConnection
-import com.youtubestream.app.ui.debug.DebugPlaybackScreen
+import com.youtubestream.app.ui.navigation.AppNavHost
 import com.youtubestream.app.ui.theme.YoutubeStreamTheme
 
 class MainActivity : ComponentActivity() {
@@ -41,13 +37,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             YoutubeStreamTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    DebugPlaybackScreen(
-                        connection = connection,
-                        container = container,
-                        modifier = Modifier.padding(innerPadding),
-                    )
-                }
+                AppNavHost(connection = connection, container = container)
             }
         }
     }
