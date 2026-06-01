@@ -25,8 +25,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.youtubestream.app.di.AppContainer
 import com.youtubestream.app.ui.components.MiniPlayer
-import com.youtubestream.app.ui.debug.DebugPlaybackScreen
 import com.youtubestream.app.ui.library.LibraryScreen
+import com.youtubestream.app.ui.player.PlayerScreen
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
 
@@ -81,7 +81,7 @@ fun AppNavHost(container: AppContainer) {
             composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
             composable(Dest.Library.route) { LibraryScreen(Modifier.fillMaxSize()) }
             composable(Dest.Player.route) {
-                DebugPlaybackScreen(connection = connection, container = container, modifier = Modifier.fillMaxSize())
+                PlayerScreen(connection = connection, modifier = Modifier.fillMaxSize())
             }
         }
     }
