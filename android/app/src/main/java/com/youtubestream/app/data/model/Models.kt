@@ -1,5 +1,7 @@
 package com.youtubestream.app.data.model
 
+import com.youtubestream.app.data.local.LibrarySong
+
 /** Clean domain model the UI consumes — backend DTO quirks are mapped away in the repository. */
 data class SearchResult(
     val id: String,
@@ -8,3 +10,10 @@ data class SearchResult(
     val durationSeconds: Int?,
     val thumbnailUrl: String?,
 )
+
+/** Progress of a two-step download (metadata POST, then file stream). */
+sealed interface DownloadState {
+    data class InProgress(val fraction: Float) : DownloadState
+    data class Completed(val song: LibrarySong) : DownloadState
+    data class Failed(val error: Throwable) : DownloadState
+}
