@@ -32,9 +32,9 @@ data class PlayableTrack(
 class PlaybackConnection(
     private val context: Context,
     private val scope: CoroutineScope,
-) {
+) : PlaybackController {
     private val _state = MutableStateFlow(PlayerUiState())
-    val state: StateFlow<PlayerUiState> = _state.asStateFlow()
+    override val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     private var controller: MediaController? = null
 
@@ -102,28 +102,28 @@ class PlaybackConnection(
 
     // --- Controls used by the UI ---
 
-    fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int = 0) {
+    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int) {
         val c = controller ?: return
         c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, 0L)
         c.prepare()
         c.play()
     }
 
-    fun togglePlayPause() {
+    override fun togglePlayPause() {
         val c = controller ?: return
         if (c.isPlaying) c.pause() else c.play()
     }
 
-    fun next() { controller?.seekToNext() }
-    fun previous() { controller?.seekToPrevious() }
-    fun seekTo(positionMs: Long) { controller?.seekTo(positionMs) }
+    override fun next() { controller?.seekToNext() }
+    override fun previous() { controller?.seekToPrevious() }
+    override fun seekTo(positionMs: Long) { controller?.seekTo(positionMs) }
 
-    fun toggleShuffle() {
+    override fun toggleShuffle() {
         val c = controller ?: return
         c.shuffleModeEnabled = !c.shuffleModeEnabled
     }
 
-    fun cycleRepeat() {
+    override fun cycleRepeat() {
         val c = controller ?: return
         c.repeatMode = RepeatModeMapper.toPlayer(RepeatModeMapper.next(RepeatModeMapper.toApp(c.repeatMode)))
     }

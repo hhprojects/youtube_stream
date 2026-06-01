@@ -25,7 +25,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.youtubestream.app.di.AppContainer
-import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.ui.debug.DebugPlaybackScreen
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
@@ -38,7 +37,8 @@ private enum class Dest(val route: String, val label: String, val icon: ImageVec
 }
 
 @Composable
-fun AppNavHost(connection: PlaybackConnection, container: AppContainer) {
+fun AppNavHost(container: AppContainer) {
+    val connection = container.playbackConnection
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     val route = current?.destination

@@ -11,6 +11,7 @@ import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsDataStore
+import com.youtubestream.app.playback.PlaybackConnection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,4 +63,10 @@ class AppContainer(context: Context) {
     val libraryRepository = LibraryRepository(db.libraryDao())
     val piLibraryRepository = PiLibraryRepository(api)
     val downloadRepository = DownloadRepository(api, fileClient, db.libraryDao(), songsDir) { currentUrl }
+
+    // MediaController is main-thread-confined, so the connection (and its position loop) runs on Main.
+    private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** App-scoped: connected once, never released — it lives for the process like the player itself. */
+    val playbackConnection = PlaybackConnection(context, playbackScope).also { it.connect() }
 }
