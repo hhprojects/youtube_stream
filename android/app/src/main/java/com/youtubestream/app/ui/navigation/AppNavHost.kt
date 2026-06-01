@@ -1,5 +1,6 @@
 package com.youtubestream.app.ui.navigation
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.youtubestream.app.di.AppContainer
+import com.youtubestream.app.ui.components.MiniPlayer
 import com.youtubestream.app.ui.debug.DebugPlaybackScreen
 import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.search.SearchScreen
@@ -44,20 +46,32 @@ fun AppNavHost(container: AppContainer) {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                Dest.entries.forEach { dest ->
-                    NavigationBarItem(
-                        selected = route?.hierarchy?.any { it.route == dest.route } == true,
-                        onClick = {
-                            nav.navigate(dest.route) {
-                                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(dest.icon, contentDescription = dest.label) },
-                        label = { Text(dest.label) },
-                    )
+            Column {
+                MiniPlayer(
+                    controller = connection,
+                    onClick = {
+                        nav.navigate(Dest.Player.route) {
+                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+                NavigationBar {
+                    Dest.entries.forEach { dest ->
+                        NavigationBarItem(
+                            selected = route?.hierarchy?.any { it.route == dest.route } == true,
+                            onClick = {
+                                nav.navigate(dest.route) {
+                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(dest.icon, contentDescription = dest.label) },
+                            label = { Text(dest.label) },
+                        )
+                    }
                 }
             }
         },
