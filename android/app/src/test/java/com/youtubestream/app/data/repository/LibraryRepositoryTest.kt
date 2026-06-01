@@ -36,4 +36,15 @@ class LibraryRepositoryTest {
         assertFalse(dao.exists("id1"))      // Room row gone
         assertEquals(emptyList<LibrarySong>(), dao.songs.value)
     }
+
+    @Test
+    fun deleteByIdRemovesRowOnly() = runTest {
+        val song = LibrarySong("id1", "T", "A", 1, "f.m4a", "/gone/f.m4a", 1L, 1L)
+        val dao = FakeDao(listOf(song))
+        val repo = LibraryRepository(dao)
+
+        repo.deleteById("id1")
+
+        assertFalse(dao.exists("id1"))
+    }
 }

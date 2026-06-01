@@ -14,4 +14,7 @@ class LibraryRepository(private val dao: LibraryDao) {
         File(song.localPath).delete()
         dao.deleteById(song.id)
     }
+
+    /** Removes just the Room row by id — used when playback hits a missing local file (file already gone). */
+    suspend fun deleteById(id: String) = dao.deleteById(id)
 }

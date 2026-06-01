@@ -5,13 +5,17 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -36,6 +40,10 @@ class PlaybackConnection(
     private val _state = MutableStateFlow(PlayerUiState())
     override val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** One-shot: emits the mediaId of a track that failed because its local file is gone. */
+    val errors: SharedFlow<String> = _errors.asSharedFlow()
+
     private var controller: MediaController? = null
 
     fun connect() {
@@ -59,6 +67,20 @@ class PlaybackConnection(
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = pushState()
+
+        override fun onPlayerError(error: PlaybackException) {
+            if (error.errorCode != PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) return
+            val c = controller ?: return
+            val idx = c.currentMediaItemIndex
+            val failedId = c.currentMediaItem?.mediaId
+            // Drop the dead item (not just skip) — the player advances to the next, and if several
+            // files are missing each error removes one and converges. seekToNext would loop forever
+            // on a missing LAST track (no-op skip → re-prepare same dead file → error again).
+            if (idx in 0 until c.mediaItemCount) c.removeMediaItem(idx)
+            c.prepare()
+            c.play()
+            failedId?.let { _errors.tryEmit(it) }
+        }
     }
 
     /** Position advances continuously but fires no events — poll it for a smooth readout. */

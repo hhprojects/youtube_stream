@@ -69,4 +69,12 @@ class AppContainer(context: Context) {
 
     /** App-scoped: connected once, never released — it lives for the process like the player itself. */
     val playbackConnection = PlaybackConnection(context, playbackScope).also { it.connect() }
+
+    init {
+        // Self-heal: a track that failed to play (missing local file) is pruned from the library.
+        // The Pi copy stays, so it reappears in Import for re-download.
+        playbackConnection.errors
+            .onEach { id -> libraryRepository.deleteById(id) }
+            .launchIn(playbackScope)
+    }
 }
