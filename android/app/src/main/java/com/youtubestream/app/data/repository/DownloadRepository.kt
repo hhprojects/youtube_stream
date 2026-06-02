@@ -6,9 +6,11 @@ import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.PiSong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.remote.dto.DownloadRequestDto
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -20,7 +22,8 @@ fun interface Importer {
 
 /**
  * Streams a file into [songsDir], emitting progress, then inserts the Room row. Cancellation-safe —
- * a partial file is deleted on failure. The returned Flow does blocking IO; collect off the main thread.
+ * a partial file is deleted on failure. Both flows do blocking OkHttp IO, so they `.flowOn(IO)`
+ * themselves — a ViewModel can safely collect them on the main dispatcher.
  */
 class DownloadRepository(
     private val api: YoutubeStreamApi,
@@ -32,9 +35,10 @@ class DownloadRepository(
 
     /** Two-step: POST /api/download (yt-dlp fetches from YouTube), then stream the new file in. */
     override fun download(videoId: String, title: String): Flow<DownloadState> = flow {
-        val meta = api.download(DownloadRequestDto(videoId, title))
-        val target = File(songsDir.apply { mkdirs() }, meta.filename)
+        var target: File? = null
         try {
+            val meta = api.download(DownloadRequestDto(videoId, title))   // may 500 → caught, not a crash
+            target = File(songsDir.apply { mkdirs() }, meta.filename)
             streamTo(absoluteUrl(meta.downloadUrl), target, meta.size)
             val song = LibrarySong(
                 id = videoId,
@@ -49,10 +53,10 @@ class DownloadRepository(
             dao.insert(song)
             emit(DownloadState.Completed(song))
         } catch (t: Throwable) {
-            target.delete()             // no orphan partial file
+            target?.delete()            // remove any partial file
             emit(DownloadState.Failed(t))
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     /** One-step: the Pi already has the file (live absolute downloadUrl) — stream it straight in. */
     override fun importSong(song: PiSong): Flow<DownloadState> = flow {
@@ -75,7 +79,7 @@ class DownloadRepository(
             target.delete()
             emit(DownloadState.Failed(t))
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     private fun absoluteUrl(downloadUrl: String): String =
         if (downloadUrl.startsWith("http")) downloadUrl else baseUrl().removeSuffix("/") + downloadUrl
