@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,14 +32,19 @@ import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 
 @Composable
-fun ImportScreen(modifier: Modifier = Modifier) {
+fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val vm = appViewModel { ImportViewModel(it.piLibraryRepository, it.libraryRepository, it.downloadRepository) }
     val state by vm.state.collectAsState()
     val selected by vm.selected.collectAsState()
     val downloads by vm.downloads.collectAsState()
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
-        Text("Import from Pi", style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Back")
+            }
+            Text("Import from Pi", style = MaterialTheme.typography.titleLarge)
+        }
 
         Box(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
             when (val s = state) {
@@ -95,7 +104,13 @@ private fun ImportRow(
                 progress = { progress.fraction },
                 modifier = Modifier.size(24.dp),
             )
-            is ImportItemState.Failed -> Text("Failed", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            is ImportItemState.Failed -> Text(
+                progress.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             null -> {}
         }
     }

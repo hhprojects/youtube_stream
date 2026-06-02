@@ -75,6 +75,8 @@ class ImportViewModel(
         }
         if (toGet.isEmpty()) return
         _selected.value = emptySet()                     // selection consumed
+        // Mark each "downloading" immediately so rows react before the first byte arrives.
+        _downloads.update { current -> current + toGet.associate { it.id to ImportItemState.Downloading(0f) } }
         viewModelScope.launch {
             for (song in toGet) {
                 importer.importSong(song).collect { st ->

@@ -83,7 +83,7 @@ fun AppNavHost(container: AppContainer) {
             composable(Dest.Library.route) {
                 LibraryScreen(onOpenImport = { nav.navigate("import") }, modifier = Modifier.fillMaxSize())
             }
-            composable("import") { ImportScreen(Modifier.fillMaxSize()) }
+            composable("import") { ImportScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
             composable(Dest.Player.route) {
                 PlayerScreen(connection = connection, modifier = Modifier.fillMaxSize())
             }
