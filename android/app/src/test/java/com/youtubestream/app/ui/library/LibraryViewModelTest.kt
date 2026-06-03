@@ -89,7 +89,7 @@ class LibraryViewModelTest {
 
     @Test fun deleteRemovesFromLibrary() = runTest {
         val dao = FakeDao(listOf(song("a"), song("b")))
-        val vm = LibraryViewModel(LibraryRepository(dao), piRepo(), FakeController())
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), piRepo(), FakeController())
         vm.delete(song("a"))
         runCurrent()
         assertEquals(listOf("b"), dao.songs.value.map { it.id })
@@ -99,7 +99,7 @@ class LibraryViewModelTest {
         val deleted = mutableListOf<String>()
         val dao = FakeDao(listOf(song("a"), song("b")))
         val pi = piRepo(onDelete = { deleted += it; DeleteResponseDto(true) })
-        val vm = LibraryViewModel(LibraryRepository(dao), pi, FakeController())
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
         vm.deleteEverywhere(song("a"))
         runCurrent()
         assertEquals(listOf("a.m4a"), deleted)                    // Pi delete called with the filename
