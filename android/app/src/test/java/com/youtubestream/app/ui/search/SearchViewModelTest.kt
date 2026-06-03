@@ -44,6 +44,7 @@ class SearchViewModelTest {
         override suspend fun search(body: SearchRequestDto) = onSearch(body.query)
         override suspend fun download(body: DownloadRequestDto) = error("unused")
         override suspend fun library(): LibraryResponseDto = error("unused")
+        override suspend fun deleteFromPi(filename: String) = error("unused")
     }
 
     private class FakeDao(initial: List<LibrarySong> = emptyList()) : LibraryDao {

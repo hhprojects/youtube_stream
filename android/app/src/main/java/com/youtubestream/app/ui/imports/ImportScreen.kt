@@ -1,5 +1,6 @@
 package com.youtubestream.app.ui.imports
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,11 +23,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.youtubestream.app.data.model.PiSong
@@ -37,6 +46,12 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsState()
     val selected by vm.selected.collectAsState()
     val downloads by vm.downloads.collectAsState()
+    var pendingDelete by remember { mutableStateOf<PiSong?>(null) }
+
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        vm.errors.collect { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
+    }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -63,6 +78,7 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 checked = song.id in selected,
                                 progress = downloads[song.id],
                                 onToggle = { vm.toggle(song.id) },
+                                onDelete = { pendingDelete = song },
                             )
                         }
                     }
@@ -81,6 +97,27 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
     }
+
+    pendingDelete?.let { song ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete from the Pi?") },
+            text = {
+                Text(
+                    "Permanently removes \"${song.title}\" from the Pi, for every device. " +
+                        "You can re-download it from YouTube via Search.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteFromPi(song); pendingDelete = null }) {
+                    Text("Delete from Pi", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -89,6 +126,7 @@ private fun ImportRow(
     checked: Boolean,
     progress: ImportItemState?,
     onToggle: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 4.dp),
@@ -112,6 +150,9 @@ private fun ImportRow(
                 overflow = TextOverflow.Ellipsis,
             )
             null -> {}
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Delete, contentDescription = "Delete from Pi")
         }
     }
 }

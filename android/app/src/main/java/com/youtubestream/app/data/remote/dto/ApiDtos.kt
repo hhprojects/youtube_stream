@@ -32,6 +32,9 @@ data class DownloadResponseDto(
 )
 
 @Serializable
+data class DeleteResponseDto(val success: Boolean)
+
+@Serializable
 data class LibraryResponseDto(val songs: List<LibrarySongDto>)
 
 @Serializable

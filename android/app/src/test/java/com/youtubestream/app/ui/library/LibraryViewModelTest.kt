@@ -2,7 +2,12 @@ package com.youtubestream.app.ui.library
 
 import com.youtubestream.app.data.local.LibraryDao
 import com.youtubestream.app.data.local.LibrarySong
+import com.youtubestream.app.data.remote.YoutubeStreamApi
+import com.youtubestream.app.data.remote.dto.DeleteResponseDto
+import com.youtubestream.app.data.remote.dto.DownloadRequestDto
+import com.youtubestream.app.data.remote.dto.SearchRequestDto
 import com.youtubestream.app.data.repository.LibraryRepository
+import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.playback.PlayableTrack
 import com.youtubestream.app.playback.PlaybackController
 import com.youtubestream.app.playback.PlayerUiState
@@ -54,8 +59,17 @@ class LibraryViewModelTest {
 
     private fun song(id: String) = LibrarySong(id, "T$id", "A$id", 0, "$id.m4a", "/songs/$id.m4a", 1L, 1L)
 
+    /** A Pi repo backed by a fake api; [onDelete] records/controls the DELETE call. */
+    private fun piRepo(onDelete: suspend (String) -> DeleteResponseDto = { error("unused") }) =
+        PiLibraryRepository(object : YoutubeStreamApi {
+            override suspend fun search(body: SearchRequestDto) = error("unused")
+            override suspend fun download(body: DownloadRequestDto) = error("unused")
+            override suspend fun library() = error("unused")
+            override suspend fun deleteFromPi(filename: String) = onDelete(filename)
+        })
+
     @Test fun exposesLibraryAsContent() = runTest {
-        val vm = LibraryViewModel(LibraryRepository(FakeDao(listOf(song("a"), song("b")))), FakeController())
+        val vm = LibraryViewModel(LibraryRepository(FakeDao(listOf(song("a"), song("b")))), piRepo(), FakeController())
         backgroundScope.launch { vm.state.collect {} }   // activate WhileSubscribed
         runCurrent()
         val content = vm.state.value as UiState.Content
@@ -65,7 +79,7 @@ class LibraryViewModelTest {
     @Test fun playSendsWholeLibraryAsQueue() = runTest {
         val controller = FakeController()
         val songs = listOf(song("a"), song("b"))
-        val vm = LibraryViewModel(LibraryRepository(FakeDao(songs)), controller)
+        val vm = LibraryViewModel(LibraryRepository(FakeDao(songs)), piRepo(), controller)
         vm.play(songs, startIndex = 1)
         assertEquals(2, controller.lastTracks?.size)
         assertEquals("a", controller.lastTracks?.get(0)?.mediaId)
@@ -75,9 +89,33 @@ class LibraryViewModelTest {
 
     @Test fun deleteRemovesFromLibrary() = runTest {
         val dao = FakeDao(listOf(song("a"), song("b")))
-        val vm = LibraryViewModel(LibraryRepository(dao), FakeController())
+        val vm = LibraryViewModel(LibraryRepository(dao), piRepo(), FakeController())
         vm.delete(song("a"))
         runCurrent()
         assertEquals(listOf("b"), dao.songs.value.map { it.id })
+    }
+
+    @Test fun deleteEverywhereRemovesLocalAndPi() = runTest {
+        val deleted = mutableListOf<String>()
+        val dao = FakeDao(listOf(song("a"), song("b")))
+        val pi = piRepo(onDelete = { deleted += it; DeleteResponseDto(true) })
+        val vm = LibraryViewModel(LibraryRepository(dao), pi, FakeController())
+        vm.deleteEverywhere(song("a"))
+        runCurrent()
+        assertEquals(listOf("a.m4a"), deleted)                    // Pi delete called with the filename
+        assertEquals(listOf("b"), dao.songs.value.map { it.id })  // local row removed too
+    }
+
+    @Test fun deleteEverywhereKeepsLocalWhenPiFails() = runTest {
+        val dao = FakeDao(listOf(song("a"), song("b")))
+        val pi = piRepo(onDelete = { throw RuntimeException("Pi offline") })
+        val vm = LibraryViewModel(LibraryRepository(dao), pi, FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()                                              // subscribe before emitting
+        vm.deleteEverywhere(song("a"))
+        runCurrent()
+        assertEquals(listOf("a", "b"), dao.songs.value.map { it.id })  // local UNTOUCHED — Pi failed first
+        assertEquals(1, errors.size)                                   // a user-facing error was emitted
     }
 }

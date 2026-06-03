@@ -8,7 +8,9 @@ import com.youtubestream.app.data.repository.Importer
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.ui.UiState
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,14 +34,17 @@ class ImportViewModel(
 
     private val _pi = MutableStateFlow<UiState<List<PiSong>>>(UiState.Loading)
 
-    private val localIds = library.observeLibrary()
-        .map { songs -> songs.map { it.id }.toSet() }
+    // Match on filename, not id: a downloaded song's row has id=videoId while the same file on the Pi
+    // has id=filename, so an id-based diff would list already-downloaded songs forever (and re-importing
+    // would insert a duplicate Room row). filename is the stable identity across the download/import paths.
+    private val localFilenames = library.observeLibrary()
+        .map { songs -> songs.map { it.filename }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
-    /** Importable = Pi songs whose id isn't already in the local library (reactive: imports drop off). */
+    /** Importable = Pi songs whose file isn't already on the device (reactive: imports drop off). */
     val state: StateFlow<UiState<List<PiSong>>> =
-        combine(_pi, localIds) { piState, local ->
-            if (piState is UiState.Content) UiState.Content(piState.data.filter { it.id !in local })
+        combine(_pi, localFilenames) { piState, local ->
+            if (piState is UiState.Content) UiState.Content(piState.data.filter { it.filename !in local })
             else piState
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)
 
@@ -48,6 +53,10 @@ class ImportViewModel(
 
     private val _downloads = MutableStateFlow<Map<String, ImportItemState>>(emptyMap())
     val downloads: StateFlow<Map<String, ImportItemState>> = _downloads.asStateFlow()
+
+    // One-shot user-facing errors (e.g. a failed Pi delete). The screen collects this into a toast.
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val errors: SharedFlow<String> = _errors
 
     init { refresh() }
 
@@ -64,6 +73,24 @@ class ImportViewModel(
 
     fun toggle(id: String) {
         _selected.update { if (id in it) it - id else it + id }
+    }
+
+    /**
+     * Deletes the song from the Pi (these are Pi-only songs, so there's no local copy to touch).
+     * On success it drops out of [_pi] so the row disappears reactively; on failure the row stays
+     * and the user sees an error.
+     */
+    fun deleteFromPi(song: PiSong) {
+        viewModelScope.launch {
+            try {
+                pi.delete(song.filename)
+                _pi.update { st ->
+                    if (st is UiState.Content) UiState.Content(st.data.filterNot { it.id == song.id }) else st
+                }
+            } catch (e: Exception) {
+                _errors.tryEmit(e.message ?: "Couldn't delete from the Pi")
+            }
+        }
     }
 
     /** Imports the currently-selected songs from [importable], sequentially, with per-item progress. */

@@ -39,6 +39,7 @@ class SettingsViewModelTest {
         override suspend fun search(body: SearchRequestDto) = error("unused")
         override suspend fun download(body: DownloadRequestDto) = error("unused")
         override suspend fun library() = onLibrary()
+        override suspend fun deleteFromPi(filename: String) = error("unused")
     })
 
     @Test fun saveUpdatesTheSource() = runTest {

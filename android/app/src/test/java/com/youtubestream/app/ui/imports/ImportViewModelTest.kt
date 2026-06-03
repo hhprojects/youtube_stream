@@ -5,6 +5,7 @@ import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.PiSong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
+import com.youtubestream.app.data.remote.dto.DeleteResponseDto
 import com.youtubestream.app.data.remote.dto.DownloadRequestDto
 import com.youtubestream.app.data.remote.dto.LibraryResponseDto
 import com.youtubestream.app.data.remote.dto.LibrarySongDto
@@ -39,10 +40,14 @@ class ImportViewModelTest {
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun teardown() = Dispatchers.resetMain()
 
-    private fun fakeApi(onLibrary: suspend () -> LibraryResponseDto) = object : YoutubeStreamApi {
+    private fun fakeApi(
+        onLibrary: suspend () -> LibraryResponseDto,
+        onDelete: suspend (String) -> DeleteResponseDto = { error("unused") },
+    ) = object : YoutubeStreamApi {
         override suspend fun search(body: SearchRequestDto) = error("unused")
         override suspend fun download(body: DownloadRequestDto) = error("unused")
         override suspend fun library() = onLibrary()
+        override suspend fun deleteFromPi(filename: String) = onDelete(filename)
     }
 
     private class FakeDao(initial: List<LibrarySong> = emptyList()) : LibraryDao {
@@ -60,8 +65,9 @@ class ImportViewModelTest {
         pi: List<LibrarySongDto> = emptyList(),
         local: List<LibrarySong> = emptyList(),
         importer: Importer = Importer { emptyFlow() },
+        onDelete: suspend (String) -> DeleteResponseDto = { error("unused") },
     ) = ImportViewModel(
-        pi = PiLibraryRepository(fakeApi { LibraryResponseDto(pi) }),
+        pi = PiLibraryRepository(fakeApi({ LibraryResponseDto(pi) }, onDelete)),
         library = LibraryRepository(FakeDao(local)),
         importer = importer,
     )
@@ -75,6 +81,20 @@ class ImportViewModelTest {
         runCurrent()
         val content = vm.state.value as UiState.Content
         assertEquals(listOf("s2"), content.data.map { it.id })   // s1 already local → excluded
+    }
+
+    @Test fun downloadedSongIsExcludedEvenWhenIdsDiffer() = runTest {
+        // A song added via Search→Download has id=videoId, while the same file on the Pi has id=filename.
+        // The diff must match on filename (the stable identity across both paths), not id — otherwise the
+        // downloaded song shows as importable forever and re-importing inserts a duplicate Library row.
+        val vm = vm(
+            pi = listOf(LibrarySongDto("good.m4a", "Good Luck, Babe!", "Chappell Roan", "Unknown", "good.m4a", "http://pi/downloads/good.m4a", 1L, "d")),
+            local = listOf(LibrarySong("vid123", "Good Luck, Babe!", "Chappell Roan", 0, "good.m4a", "/p/good.m4a", 1L, 1L)),
+        )
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        val content = vm.state.value as UiState.Content
+        assertEquals(emptyList<String>(), content.data.map { it.id })  // already on device by filename → excluded
     }
 
     @Test fun toggleAddsAndRemovesSelection() = runTest {
@@ -114,7 +134,7 @@ class ImportViewModelTest {
             }
         }
         val vm = ImportViewModel(
-            pi = PiLibraryRepository(fakeApi { LibraryResponseDto(listOf(piDto("s1"), piDto("s2"))) }),
+            pi = PiLibraryRepository(fakeApi(onLibrary = { LibraryResponseDto(listOf(piDto("s1"), piDto("s2"))) })),
             library = LibraryRepository(dao),
             importer = importer,
         )
@@ -126,5 +146,39 @@ class ImportViewModelTest {
         vm.downloadSelected(listOf(PiSong("s1", "Ts1", "As1", "s1.m4a", "http://pi/downloads/s1.m4a", 1L))); runCurrent()
 
         assertEquals(listOf("s2"), (vm.state.value as UiState.Content).data.map { it.id })  // s1 imported → gone
+    }
+
+    @Test fun deleteFromPiRemovesSongFromImportable() = runTest {
+        val deleted = mutableListOf<String>()
+        val vm = vm(
+            pi = listOf(piDto("s1"), piDto("s2")),
+            onDelete = { deleted += it; DeleteResponseDto(true) },
+        )
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        assertEquals(listOf("s1", "s2"), (vm.state.value as UiState.Content).data.map { it.id })
+
+        vm.deleteFromPi(PiSong("s1", "Ts1", "As1", "s1.m4a", "http://pi/downloads/s1.m4a", 1L))
+        runCurrent()
+
+        assertEquals(listOf("s1.m4a"), deleted)                                            // Pi delete called w/ filename
+        assertEquals(listOf("s2"), (vm.state.value as UiState.Content).data.map { it.id })  // dropped off the list
+    }
+
+    @Test fun deleteFromPiKeepsSongAndEmitsErrorOnFailure() = runTest {
+        val vm = vm(
+            pi = listOf(piDto("s1"), piDto("s2")),
+            onDelete = { throw RuntimeException("Pi offline") },
+        )
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.state.collect {} }
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
+
+        vm.deleteFromPi(PiSong("s1", "Ts1", "As1", "s1.m4a", "http://pi/downloads/s1.m4a", 1L))
+        runCurrent()
+
+        assertEquals(listOf("s1", "s2"), (vm.state.value as UiState.Content).data.map { it.id })  // list unchanged
+        assertEquals(1, errors.size)                                                              // error surfaced
     }
 }
