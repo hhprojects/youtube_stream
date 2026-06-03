@@ -8,6 +8,8 @@ import com.youtubestream.app.data.repository.Downloader
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.ui.UiState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,12 +43,17 @@ class SearchViewModel(
         .map { songs -> songs.map { it.id }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
+    private var searchJob: Job? = null
+
     fun search(query: String) {
         if (query.isBlank()) return
-        viewModelScope.launch {
+        searchJob?.cancel()   // a newer search supersedes the last — don't let a stale result win
+        searchJob = viewModelScope.launch {
             _state.value = UiState.Loading
             _state.value = try {
                 UiState.Content(repo.search(query.trim()))
+            } catch (e: CancellationException) {
+                throw e       // cancelled by a newer search — not an error to show
             } catch (e: Exception) {
                 UiState.Error(e.message ?: "Search failed")
             }

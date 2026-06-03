@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
@@ -19,13 +21,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.youtubestream.app.data.model.SearchResult
@@ -35,10 +39,11 @@ import com.youtubestream.app.ui.appViewModel
 @Composable
 fun SearchScreen(modifier: Modifier = Modifier) {
     val vm = appViewModel { SearchViewModel(it.searchRepository, it.downloadRepository, it.libraryRepository) }
-    val state by vm.state.collectAsState()
-    val downloads by vm.downloads.collectAsState()
-    val downloaded by vm.downloadedIds.collectAsState()
+    val state by vm.state.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val downloaded by vm.downloadedIds.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -46,6 +51,12 @@ fun SearchScreen(modifier: Modifier = Modifier) {
                 value = query,
                 onValueChange = { query = it },
                 label = { Text("Search YouTube") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    vm.search(query)
+                    focusManager.clearFocus()
+                }),
                 modifier = Modifier.weight(1f),
             )
             Button(onClick = { vm.search(query) }, modifier = Modifier.padding(start = 8.dp)) { Text("Go") }
