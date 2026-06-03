@@ -29,10 +29,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import android.widget.Toast
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,11 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.youtubestream.app.BuildConfig
 import com.youtubestream.app.playback.AppRepeatMode
 import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.playback.PlayerUiState
@@ -52,14 +50,7 @@ import com.youtubestream.app.playback.QueueItem
 
 @Composable
 fun PlayerScreen(connection: PlaybackConnection, modifier: Modifier = Modifier) {
-    val state by connection.state.collectAsState()
-
-    val context = LocalContext.current
-    LaunchedEffect(connection) {
-        connection.errors.collect {
-            Toast.makeText(context, "Skipped a track — its file was missing (removed from library)", Toast.LENGTH_SHORT).show()
-        }
-    }
+    val state by connection.state.collectAsStateWithLifecycle()
 
     if (!state.isConnected || state.currentMediaId == null) {
         EmptyPlayer(modifier) { connection.setQueueAndPlay(DebugTracks.TEST_TRACKS) }
@@ -125,7 +116,14 @@ private fun EmptyPlayer(modifier: Modifier, onLoadTestTracks: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Nothing playing")
-        Button(onClick = onLoadTestTracks) { Text("Load test tracks") }
+        Text(
+            "Pick a song from your Library to start playing.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (BuildConfig.DEBUG) {   // dev-only convenience; never shown to release users
+            Button(onClick = onLoadTestTracks) { Text("Load test tracks") }
+        }
     }
 }
 

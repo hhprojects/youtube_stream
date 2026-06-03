@@ -41,8 +41,12 @@ class PlaybackConnection(
     override val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    /** One-shot: emits the mediaId of a track that failed because its local file is gone. */
+    /** One-shot: emits the mediaId of a track that failed because its local file is gone (→ prune the row). */
     val errors: SharedFlow<String> = _errors.asSharedFlow()
+
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** One-shot human-readable playback errors for the UI to surface (toast). */
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     private var controller: MediaController? = null
 
@@ -69,17 +73,28 @@ class PlaybackConnection(
         override fun onEvents(player: Player, events: Player.Events) = pushState()
 
         override fun onPlayerError(error: PlaybackException) {
-            if (error.errorCode != PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) return
             val c = controller ?: return
-            val idx = c.currentMediaItemIndex
-            val failedId = c.currentMediaItem?.mediaId
-            // Drop the dead item (not just skip) — the player advances to the next, and if several
-            // files are missing each error removes one and converges. seekToNext would loop forever
-            // on a missing LAST track (no-op skip → re-prepare same dead file → error again).
-            if (idx in 0 until c.mediaItemCount) c.removeMediaItem(idx)
-            c.prepare()
-            c.play()
-            failedId?.let { _errors.tryEmit(it) }
+            if (error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) {
+                val idx = c.currentMediaItemIndex
+                val failedId = c.currentMediaItem?.mediaId
+                // Drop the dead item (not just skip) — the player advances to the next, and if several
+                // files are missing each error removes one and converges. seekToNext would loop forever
+                // on a missing LAST track (no-op skip → re-prepare same dead file → error again).
+                if (idx in 0 until c.mediaItemCount) c.removeMediaItem(idx)
+                c.prepare()
+                c.play()
+                failedId?.let { _errors.tryEmit(it) }            // → AppContainer prunes the library row
+                _messages.tryEmit("Skipped a track — its file was missing (removed from library)")
+                return
+            }
+            // Any other failure (network, decode, unsupported source): surface it and keep the queue
+            // moving, but only skip when there's a next item — re-preparing a failing LAST track loops.
+            _messages.tryEmit("Can't play this track (${error.errorCodeName})")
+            if (c.hasNextMediaItem()) {
+                c.seekToNext()
+                c.prepare()
+                c.play()
+            }
         }
     }
 
