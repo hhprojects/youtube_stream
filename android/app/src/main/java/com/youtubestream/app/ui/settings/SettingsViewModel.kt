@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsSource
+import com.youtubestream.app.data.settings.normalizeServerUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +32,12 @@ class SettingsViewModel(
     val test: StateFlow<TestResult> = _test.asStateFlow()
 
     fun save(url: String) {
-        viewModelScope.launch { settings.setServerUrl(url.trim()) }
+        val normalized = normalizeServerUrl(url)
+        if (normalized == null) {
+            _test.value = TestResult.Failed("Enter a valid URL like http://192.168.1.5:3001")
+            return
+        }
+        viewModelScope.launch { settings.setServerUrl(normalized) }
     }
 
     fun reset() {

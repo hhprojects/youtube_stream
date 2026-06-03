@@ -50,6 +50,22 @@ class SettingsViewModelTest {
         assertEquals("http://new:3001", settings.flow.value)
     }
 
+    @Test fun saveNormalizesSchemelessUrl() = runTest {
+        val settings = FakeSettings("http://old:3001")
+        val vm = SettingsViewModel(settings, piRepo { LibraryResponseDto(emptyList()) })
+        vm.save("10.0.0.9:3001")
+        runCurrent()
+        assertEquals("http://10.0.0.9:3001", settings.flow.value)   // scheme prepended
+    }
+
+    @Test fun saveRejectsInvalidUrl() = runTest {
+        val settings = FakeSettings("http://old:3001")
+        val vm = SettingsViewModel(settings, piRepo { LibraryResponseDto(emptyList()) })
+        vm.save("http://")     // scheme but no host
+        runCurrent()
+        assertEquals("http://old:3001", settings.flow.value)        // unchanged — not saved
+    }
+
     @Test fun testConnectionOkReportsCount() = runTest {
         val song = LibrarySongDto("a", "T", "A", "Unknown", "a.m4a", "u", 1L, "d")
         val vm = SettingsViewModel(FakeSettings("u"), piRepo { LibraryResponseDto(listOf(song)) })
