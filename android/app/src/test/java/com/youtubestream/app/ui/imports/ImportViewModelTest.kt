@@ -10,6 +10,8 @@ import com.youtubestream.app.data.remote.dto.DownloadRequestDto
 import com.youtubestream.app.data.remote.dto.LibraryResponseDto
 import com.youtubestream.app.data.remote.dto.LibrarySongDto
 import com.youtubestream.app.data.remote.dto.SearchRequestDto
+import com.youtubestream.app.data.repository.ImportDownloadManager
+import com.youtubestream.app.data.repository.ImportItemState
 import com.youtubestream.app.data.repository.Importer
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -61,7 +64,8 @@ class ImportViewModelTest {
     private fun piDto(id: String) =
         LibrarySongDto(id, "T$id", "A$id", "Unknown", "$id.m4a", "http://pi/downloads/$id.m4a", 1L, "d")
 
-    private fun vm(
+    // Extension on TestScope so the app-scoped manager runs on backgroundScope (driven by runCurrent()).
+    private fun TestScope.vm(
         pi: List<LibrarySongDto> = emptyList(),
         local: List<LibrarySong> = emptyList(),
         importer: Importer = Importer { emptyFlow() },
@@ -69,7 +73,7 @@ class ImportViewModelTest {
     ) = ImportViewModel(
         pi = PiLibraryRepository(fakeApi({ LibraryResponseDto(pi) }, onDelete)),
         library = LibraryRepository(FakeDao(local)),
-        importer = importer,
+        importManager = ImportDownloadManager(importer, backgroundScope),
     )
 
     @Test fun importableIsPiMinusLocal() = runTest {
@@ -136,7 +140,7 @@ class ImportViewModelTest {
         val vm = ImportViewModel(
             pi = PiLibraryRepository(fakeApi(onLibrary = { LibraryResponseDto(listOf(piDto("s1"), piDto("s2"))) })),
             library = LibraryRepository(dao),
-            importer = importer,
+            importManager = ImportDownloadManager(importer, backgroundScope),
         )
         backgroundScope.launch { vm.state.collect {} }
         runCurrent()

@@ -2,9 +2,9 @@ package com.youtubestream.app.ui.imports
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.PiSong
-import com.youtubestream.app.data.repository.Importer
+import com.youtubestream.app.data.repository.ImportDownloadManager
+import com.youtubestream.app.data.repository.ImportItemState
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.ui.UiState
@@ -20,16 +20,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Per-song bulk-import status. `Completed` isn't here — a finished id leaves the importable list. */
-sealed interface ImportItemState {
-    data class Downloading(val fraction: Float) : ImportItemState
-    data class Failed(val message: String) : ImportItemState
-}
-
 class ImportViewModel(
     private val pi: PiLibraryRepository,
     private val library: LibraryRepository,
-    private val importer: Importer,
+    private val importManager: ImportDownloadManager,
 ) : ViewModel() {
 
     private val _pi = MutableStateFlow<UiState<List<PiSong>>>(UiState.Loading)
@@ -51,8 +45,8 @@ class ImportViewModel(
     private val _selected = MutableStateFlow<Set<String>>(emptySet())
     val selected: StateFlow<Set<String>> = _selected.asStateFlow()
 
-    private val _downloads = MutableStateFlow<Map<String, ImportItemState>>(emptyMap())
-    val downloads: StateFlow<Map<String, ImportItemState>> = _downloads.asStateFlow()
+    /** Bulk-import progress, owned by the app-scoped manager so it survives leaving this screen. */
+    val downloads: StateFlow<Map<String, ImportItemState>> = importManager.downloads
 
     // One-shot user-facing errors (e.g. a failed Pi delete). The screen collects this into a toast.
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -93,32 +87,15 @@ class ImportViewModel(
         }
     }
 
-    /** Imports the currently-selected songs from [importable], sequentially, with per-item progress. */
+    /**
+     * Hands the selected songs to the app-scoped [importManager]. Downloads continue (and progress keeps
+     * updating) even if the user navigates away from Import — unlike a `viewModelScope` loop, which the
+     * back-stack would cancel.
+     */
     fun downloadSelected(importable: List<PiSong>) {
-        // Exclude ids already importing — re-tapping Download mid-import must not start a second
-        // stream writing the same target file (mirrors SearchViewModel.download's in-flight guard).
-        val toGet = importable.filter {
-            it.id in _selected.value && _downloads.value[it.id] !is ImportItemState.Downloading
-        }
+        val toGet = importable.filter { it.id in _selected.value }
         if (toGet.isEmpty()) return
         _selected.value = emptySet()                     // selection consumed
-        // Mark each "downloading" immediately so rows react before the first byte arrives.
-        _downloads.update { current -> current + toGet.associate { it.id to ImportItemState.Downloading(0f) } }
-        viewModelScope.launch {
-            for (song in toGet) {
-                importer.importSong(song).collect { st ->
-                    _downloads.update { current ->
-                        when (st) {
-                            is DownloadState.InProgress ->
-                                current + (song.id to ImportItemState.Downloading(st.fraction))
-                            is DownloadState.Completed ->
-                                current - song.id        // inserted → drops off importable via the Room flow
-                            is DownloadState.Failed ->
-                                current + (song.id to ImportItemState.Failed(st.error.message ?: "Download failed"))
-                        }
-                    }
-                }
-            }
-        }
+        importManager.enqueue(toGet)
     }
 }

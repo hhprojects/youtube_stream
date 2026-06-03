@@ -26,7 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,15 +37,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.youtubestream.app.data.model.PiSong
+import com.youtubestream.app.data.repository.ImportItemState
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 
 @Composable
 fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
-    val vm = appViewModel { ImportViewModel(it.piLibraryRepository, it.libraryRepository, it.downloadRepository) }
-    val state by vm.state.collectAsState()
-    val selected by vm.selected.collectAsState()
-    val downloads by vm.downloads.collectAsState()
+    val vm = appViewModel { ImportViewModel(it.piLibraryRepository, it.libraryRepository, it.importDownloadManager) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    val selected by vm.selected.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<PiSong?>(null) }
 
     val context = LocalContext.current

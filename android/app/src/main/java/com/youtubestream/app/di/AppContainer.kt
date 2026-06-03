@@ -6,6 +6,7 @@ import com.youtubestream.app.data.local.AppDatabase
 import com.youtubestream.app.data.remote.BaseUrlInterceptor
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.repository.DownloadRepository
+import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.repository.SearchRepository
@@ -45,24 +46,43 @@ class AppContainer(context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    // The /api/download POST blocks while yt-dlp fetches from YouTube — that can take minutes, so it
+    // needs a long read timeout. A separate client keeps search/library on 30s (they should fail fast).
+    private val downloadClient = OkHttpClient.Builder()
+        .addInterceptor(BaseUrlInterceptor { currentUrl })
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(300, TimeUnit.SECONDS)
+        .build()
+
+    // The interceptor makes the file fetch follow the configured Pi URL too: the Pi bakes a static
+    // host into downloadUrl, but /downloads is same-origin with /api, so rewriting host/port is correct.
     private val fileClient = OkHttpClient.Builder()
+        .addInterceptor(BaseUrlInterceptor { currentUrl })
         .readTimeout(300, TimeUnit.SECONDS)  // big downloads
         .build()
 
-    private val api: YoutubeStreamApi = Retrofit.Builder()
+    private fun buildApi(client: OkHttpClient): YoutubeStreamApi = Retrofit.Builder()
         .baseUrl("http://placeholder/")      // swapped per-request by the interceptor
-        .client(apiClient)
+        .client(client)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
         .create(YoutubeStreamApi::class.java)
 
-    private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db").build()
+    private val api = buildApi(apiClient)               // search, library, delete — 30s timeout
+    private val downloadApi = buildApi(downloadClient)  // the slow yt-dlp POST — 300s timeout
+
+    private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
+        .fallbackToDestructiveMigration(dropAllTables = true)  // rows re-derive from the Pi via Import
+        .build()
     private val songsDir = File(context.filesDir, "songs")
 
     val searchRepository = SearchRepository(api)
     val libraryRepository = LibraryRepository(db.libraryDao())
     val piLibraryRepository = PiLibraryRepository(api)
-    val downloadRepository = DownloadRepository(api, fileClient, db.libraryDao(), songsDir) { currentUrl }
+    val downloadRepository = DownloadRepository(downloadApi, fileClient, db.libraryDao(), songsDir) { currentUrl }
+
+    // Bulk Pi imports run here (app-scoped), so they keep going if the user leaves the Import screen.
+    val importDownloadManager = ImportDownloadManager(downloadRepository, appScope)
 
     // MediaController is main-thread-confined, so the connection (and its position loop) runs on Main.
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
