@@ -13,7 +13,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +30,7 @@ fun MiniPlayer(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by controller.state.collectAsState()
+    val state by controller.state.collectAsStateWithLifecycle()
     if (!state.isConnected || state.currentMediaId == null) return
 
     Surface(tonalElevation = 3.dp, modifier = modifier.fillMaxWidth()) {
