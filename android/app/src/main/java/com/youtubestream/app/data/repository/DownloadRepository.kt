@@ -6,6 +6,7 @@ import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.PiSong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.remote.dto.DownloadRequestDto
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -38,6 +39,7 @@ class DownloadRepository(
         var target: File? = null
         try {
             val meta = api.download(DownloadRequestDto(videoId, title))   // may 500 → caught, not a crash
+            if (!meta.success) error("The Pi reported the download failed")
             target = File(songsDir.apply { mkdirs() }, meta.filename)
             streamTo(absoluteUrl(meta.downloadUrl), target, meta.size)
             val song = LibrarySong(
@@ -52,6 +54,9 @@ class DownloadRepository(
             )
             dao.insert(song)
             emit(DownloadState.Completed(song))
+        } catch (c: CancellationException) {
+            target?.delete()            // clean up the partial, then let cancellation propagate
+            throw c
         } catch (t: Throwable) {
             target?.delete()            // remove any partial file
             emit(DownloadState.Failed(t))
@@ -75,6 +80,9 @@ class DownloadRepository(
             )
             dao.insert(row)
             emit(DownloadState.Completed(row))
+        } catch (c: CancellationException) {
+            target.delete()             // clean up the partial, then let cancellation propagate
+            throw c
         } catch (t: Throwable) {
             target.delete()
             emit(DownloadState.Failed(t))

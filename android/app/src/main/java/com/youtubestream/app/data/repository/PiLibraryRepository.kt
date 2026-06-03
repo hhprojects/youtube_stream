@@ -7,9 +7,10 @@ import com.youtubestream.app.data.remote.dto.LibrarySongDto
 class PiLibraryRepository(private val api: YoutubeStreamApi) {
     suspend fun piLibrary(): List<PiSong> = api.library().songs.map { it.toDomain() }
 
-    /** Deletes the file from the Pi by filename. Throws (HttpException/IOException) on failure. */
+    /** Deletes the file from the Pi by filename. Throws on transport failure or a `success:false` body. */
     suspend fun delete(filename: String) {
-        api.deleteFromPi(filename)
+        val resp = api.deleteFromPi(filename)
+        if (!resp.success) error("The Pi reported the delete failed")
     }
 }
 
