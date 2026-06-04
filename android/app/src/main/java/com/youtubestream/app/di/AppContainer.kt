@@ -6,6 +6,7 @@ import com.youtubestream.app.data.local.AppDatabase
 import com.youtubestream.app.data.network.ConnectivityObserver
 import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
+import com.youtubestream.app.data.playback.QueueDataStore
 import com.youtubestream.app.data.remote.BaseUrlInterceptor
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.repository.DownloadRepository
@@ -100,7 +101,8 @@ class AppContainer(context: Context) {
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** App-scoped: connected once, never released — it lives for the process like the player itself. */
-    val playbackConnection = PlaybackConnection(context, playbackScope).also { it.connect() }
+    val playbackConnection =
+        PlaybackConnection(context, playbackScope, QueueDataStore(context)).also { it.connect() }
 
     init {
         // Self-heal: a track that failed to play (missing local file) is pruned from the library.

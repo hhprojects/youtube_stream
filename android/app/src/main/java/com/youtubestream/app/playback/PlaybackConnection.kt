@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+/** How long to coalesce a burst of player events before writing the queue to disk. */
+private const val SAVE_DEBOUNCE_MS = 400L
+
 /**
  * The UI's only door to playback. Connects a [MediaController] to [PlaybackService],
  * mirrors player events into [state], and exposes control methods. Main-thread-confined.
@@ -27,6 +31,7 @@ import kotlinx.coroutines.launch
 class PlaybackConnection(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val queueStore: QueueStore,
 ) : PlaybackController {
     private val _state = MutableStateFlow(PlayerUiState())
     override val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -41,6 +46,16 @@ class PlaybackConnection(
 
     private var controller: MediaController? = null
 
+    /**
+     * Our copy of the queue we last set, in timeline order. The source of truth for track URIs:
+     * the controller hands back items with their URI stripped across the session boundary, so we
+     * cannot reconstruct the queue from it — we persist this instead.
+     */
+    private var currentQueue: List<PlayableTrack> = emptyList()
+
+    /** Debounces queue/position writes so a burst of player events collapses into one save. */
+    private var saveJob: Job? = null
+
     fun connect() {
         if (controller != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
@@ -51,6 +66,7 @@ class PlaybackConnection(
             c.addListener(playerListener)
             pushState()
             startPositionLoop()
+            restoreQueueIfEmpty()
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -61,7 +77,20 @@ class PlaybackConnection(
     }
 
     private val playerListener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) = pushState()
+        override fun onEvents(player: Player, events: Player.Events) {
+            pushState()
+            // Persist when the queue, the current track, the play state, or the position jumps —
+            // not on the smooth position tick (that fires no event). Debounced to one write.
+            if (events.containsAny(
+                    Player.EVENT_TIMELINE_CHANGED,
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                    Player.EVENT_IS_PLAYING_CHANGED,
+                    Player.EVENT_POSITION_DISCONTINUITY,
+                )
+            ) {
+                scheduleSave()
+            }
+        }
 
         override fun onPlayerError(error: PlaybackException) {
             val c = controller ?: return
@@ -71,7 +100,10 @@ class PlaybackConnection(
                 // Drop the dead item (not just skip) — the player advances to the next, and if several
                 // files are missing each error removes one and converges. seekToNext would loop forever
                 // on a missing LAST track (no-op skip → re-prepare same dead file → error again).
-                if (idx in 0 until c.mediaItemCount) c.removeMediaItem(idx)
+                if (idx in 0 until c.mediaItemCount) {
+                    c.removeMediaItem(idx)
+                    dropFromCurrentQueue(idx)   // keep our URI list aligned with the controller's timeline
+                }
                 c.prepare()
                 c.play()
                 failedId?.let { _errors.tryEmit(it) }            // → AppContainer prunes the library row
@@ -135,9 +167,11 @@ class PlaybackConnection(
 
     override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int) {
         val c = controller ?: return
+        currentQueue = tracks
         c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, 0L)
         c.prepare()
         c.play()
+        saveNow()   // the high-value "new queue" event — persist now, don't risk the debounce window
     }
 
     override fun togglePlayPause() {
@@ -157,6 +191,63 @@ class PlaybackConnection(
     override fun cycleRepeat() {
         val c = controller ?: return
         c.repeatMode = RepeatModeMapper.toPlayer(RepeatModeMapper.next(RepeatModeMapper.toApp(c.repeatMode)))
+    }
+
+    // --- Cross-session persistence ---
+
+    /** Persist now, capturing the snapshot at call time so a later change can't alter what we write. */
+    private fun saveNow() {
+        val snapshot = currentSnapshot() ?: return
+        scope.launch { queueStore.save(snapshot) }
+    }
+
+    /** Coalesce a burst of player events into one delayed write of the latest snapshot. */
+    private fun scheduleSave() {
+        saveJob?.cancel()
+        saveJob = scope.launch {
+            delay(SAVE_DEBOUNCE_MS)
+            currentSnapshot()?.let { queueStore.save(it) }
+        }
+    }
+
+    /** The queue + current position to persist, or null when there's nothing worth saving. */
+    private fun currentSnapshot(): PersistedQueue? {
+        val c = controller ?: return null
+        if (currentQueue.isEmpty()) return null
+        return PersistedQueue(
+            tracks = currentQueue,
+            currentIndex = c.currentMediaItemIndex.coerceIn(0, currentQueue.lastIndex),
+            positionMs = c.currentPosition.coerceAtLeast(0L),
+        )
+    }
+
+    private fun dropFromCurrentQueue(index: Int) {
+        if (index in currentQueue.indices) {
+            currentQueue = currentQueue.toMutableList().apply { removeAt(index) }
+        }
+    }
+
+    /**
+     * On connect, if the service has no live queue (the process had been killed), rehydrate the last
+     * session's queue — seeked to where the user left off, but paused. Never auto-plays.
+     */
+    private fun restoreQueueIfEmpty() {
+        val c = controller ?: return
+        if (c.mediaItemCount > 0) return                 // service survived with a live queue — leave it
+        scope.launch {
+            val saved = queueStore.load() ?: return@launch
+            if (saved.tracks.isEmpty()) return@launch
+            if (c.mediaItemCount > 0) return@launch       // a song was picked while load() suspended — don't clobber
+            currentQueue = saved.tracks
+            val startIndex = saved.currentIndex.coerceIn(0, saved.tracks.lastIndex)
+            c.setMediaItems(
+                saved.tracks.map { it.toMediaItem() },
+                startIndex,
+                saved.positionMs.coerceAtLeast(0L),
+            )
+            c.prepare()                                   // buffer & show it, but stay paused (no play())
+            pushState()
+        }
     }
 }
 
