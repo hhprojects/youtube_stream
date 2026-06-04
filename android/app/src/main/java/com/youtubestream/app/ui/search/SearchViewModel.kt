@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.SearchResult
+import com.youtubestream.app.data.network.ReachabilitySource
+import com.youtubestream.app.data.network.ServerStatus
 import com.youtubestream.app.data.repository.Downloader
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.SearchRepository
@@ -29,6 +31,7 @@ class SearchViewModel(
     private val repo: SearchRepository,
     private val downloader: Downloader,
     private val library: LibraryRepository,
+    private val reachability: ReachabilitySource,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState<List<SearchResult>>>(UiState.Idle)
@@ -42,6 +45,12 @@ class SearchViewModel(
     val downloadedIds: StateFlow<Set<String>> = library.observeLibrary()
         .map { songs -> songs.map { it.id }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** App-wide Pi reachability — the screen shows a banner and gates controls on this. */
+    val status: StateFlow<ServerStatus> = reachability.status
+
+    /** Probe on screen entry so the gate reflects the Pi before the user acts. */
+    fun onEnter() { viewModelScope.launch { reachability.probe() } }
 
     private var searchJob: Job? = null
 

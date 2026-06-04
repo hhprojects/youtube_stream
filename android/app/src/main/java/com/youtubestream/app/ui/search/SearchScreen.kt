@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,19 +34,24 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.youtubestream.app.data.model.SearchResult
+import com.youtubestream.app.data.network.allowsPiActions
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
+import com.youtubestream.app.ui.components.ServerStatusBanner
 
 @Composable
 fun SearchScreen(modifier: Modifier = Modifier) {
-    val vm = appViewModel { SearchViewModel(it.searchRepository, it.downloadRepository, it.libraryRepository) }
+    val vm = appViewModel { SearchViewModel(it.searchRepository, it.downloadRepository, it.libraryRepository, it.serverReachability) }
     val state by vm.state.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val downloaded by vm.downloadedIds.collectAsStateWithLifecycle()
+    val status by vm.status.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.onEnter() }
     var query by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+        ServerStatusBanner(status, onRetry = { vm.onEnter() })
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = query,
@@ -54,12 +60,16 @@ fun SearchScreen(modifier: Modifier = Modifier) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
-                    vm.search(query)
+                    if (status.allowsPiActions) vm.search(query)
                     focusManager.clearFocus()
                 }),
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = { vm.search(query) }, modifier = Modifier.padding(start = 8.dp)) { Text("Go") }
+            Button(
+                onClick = { vm.search(query) },
+                enabled = status.allowsPiActions,
+                modifier = Modifier.padding(start = 8.dp),
+            ) { Text("Go") }
         }
 
         Box(Modifier.fillMaxSize().padding(top = 12.dp), contentAlignment = Alignment.Center) {
@@ -79,6 +89,7 @@ fun SearchScreen(modifier: Modifier = Modifier) {
                                 result = result,
                                 downloaded = result.id in downloaded,
                                 download = downloads[result.id],
+                                canDownload = status.allowsPiActions,
                                 onDownload = { vm.download(result) },
                             )
                         }
@@ -94,6 +105,7 @@ private fun ResultRow(
     result: SearchResult,
     downloaded: Boolean,
     download: ItemDownload?,
+    canDownload: Boolean,
     onDownload: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -112,8 +124,8 @@ private fun ResultRow(
                 progress = { download.fraction },
                 modifier = Modifier.size(28.dp),
             )
-            download is ItemDownload.Failed -> TextButton(onClick = onDownload) { Text("Retry") }
-            else -> TextButton(onClick = onDownload) { Text("Download") }
+            download is ItemDownload.Failed -> TextButton(onClick = onDownload, enabled = canDownload) { Text("Retry") }
+            else -> TextButton(onClick = onDownload, enabled = canDownload) { Text("Download") }
         }
     }
 }

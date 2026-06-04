@@ -11,6 +11,8 @@ import com.youtubestream.app.data.remote.dto.LibraryResponseDto
 import com.youtubestream.app.data.remote.dto.SearchRequestDto
 import com.youtubestream.app.data.remote.dto.SearchResponseDto
 import com.youtubestream.app.data.remote.dto.SearchResultDto
+import com.youtubestream.app.data.network.ReachabilitySource
+import com.youtubestream.app.data.network.ServerStatus
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.ui.UiState
@@ -18,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -55,14 +58,21 @@ class SearchViewModelTest {
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
     }
 
+    private fun fakeReachability() = object : ReachabilitySource {
+        override val status: StateFlow<ServerStatus> = MutableStateFlow(ServerStatus.REACHABLE)
+        override suspend fun probe() {}
+    }
+
     private fun vmWith(
         onSearch: suspend (String) -> SearchResponseDto = { error("search unused") },
         downloader: (String, String) -> Flow<DownloadState> = { _, _ -> emptyFlow() },
         dao: FakeDao = FakeDao(),
+        reachability: ReachabilitySource = fakeReachability(),
     ) = SearchViewModel(
         repo = SearchRepository(fakeApi(onSearch)),
         downloader = { id, title -> downloader(id, title) },
         library = LibraryRepository(dao),
+        reachability = reachability,
     )
 
     // --- search (migrated from Plan 3) ---
