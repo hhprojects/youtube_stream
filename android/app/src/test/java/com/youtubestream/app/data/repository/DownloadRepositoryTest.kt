@@ -86,4 +86,26 @@ class DownloadRepositoryTest {
         assertEquals(listOf(done.song), dao.songs.value)           // row inserted (no POST hit)
         server.shutdown()
     }
+
+    @Test
+    fun importStoresResolvedArtwork() = runTest {
+        val server = MockWebServer().apply { start() }
+        val fileUrl = server.url("/downloads/s1.m4a").toString()
+        server.enqueue(MockResponse().setBody("DATA"))
+
+        val json = Json { ignoreUnknownKeys = true }
+        val api = Retrofit.Builder().baseUrl(server.url("/"))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build().create(YoutubeStreamApi::class.java)
+        val dao = FakeDao()
+        val songsDir = File.createTempFile("songs", "").let { it.delete(); it.mkdirs(); it }
+        val repo = DownloadRepository(api, OkHttpClient(), dao, songsDir,
+            lookupArtwork = { "http://img/imported.jpg" }) { server.url("/").toString() }
+
+        val piSong = PiSong("s1", "T", "A", "s1.m4a", fileUrl, 4L)
+        val done = repo.importSong(piSong).toList().last() as DownloadState.Completed
+
+        assertEquals("http://img/imported.jpg", done.song.artworkUrl)   // resolved via the lookup seam
+        server.shutdown()
+    }
 }

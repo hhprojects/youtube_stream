@@ -31,6 +31,7 @@ class DownloadRepository(
     private val fileClient: OkHttpClient,   // 300s-timeout client for the file stream
     private val dao: LibraryDao,
     private val songsDir: File,             // filesDir/songs
+    private val lookupArtwork: suspend (PiSong) -> String? = { null },  // best-effort art for imports; null = placeholder
     private val baseUrl: () -> String,      // resolves a relative downloadUrl (real ones are absolute)
 ) : Downloader, Importer {
 
@@ -69,6 +70,7 @@ class DownloadRepository(
         val target = File(songsDir.apply { mkdirs() }, song.filename)
         try {
             streamTo(absoluteUrl(song.downloadUrl), target, song.size)
+            val artworkUrl = lookupArtwork(song)   // best-effort search-by-title; null falls back to the placeholder
             val row = LibrarySong(
                 id = song.id,
                 title = song.title,
@@ -78,6 +80,7 @@ class DownloadRepository(
                 localPath = target.absolutePath,
                 size = song.size,
                 dateAdded = System.currentTimeMillis(),
+                artworkUrl = artworkUrl,
             )
             dao.insert(row)
             emit(DownloadState.Completed(row))
