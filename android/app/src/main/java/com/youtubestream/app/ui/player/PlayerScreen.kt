@@ -42,18 +42,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.youtubestream.app.BuildConfig
 import com.youtubestream.app.playback.AppRepeatMode
 import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.playback.PlayerUiState
 import com.youtubestream.app.playback.QueueItem
 
 @Composable
-fun PlayerScreen(connection: PlaybackConnection, modifier: Modifier = Modifier) {
+fun PlayerScreen(
+    connection: PlaybackConnection,
+    onBrowseLibrary: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val state by connection.state.collectAsStateWithLifecycle()
 
     if (!state.isConnected || state.currentMediaId == null) {
-        EmptyPlayer(modifier) { connection.setQueueAndPlay(DebugTracks.TEST_TRACKS) }
+        EmptyPlayer(modifier, onBrowseLibrary)
         return
     }
 
@@ -109,7 +112,7 @@ fun PlayerScreen(connection: PlaybackConnection, modifier: Modifier = Modifier) 
 }
 
 @Composable
-private fun EmptyPlayer(modifier: Modifier, onLoadTestTracks: () -> Unit) {
+private fun EmptyPlayer(modifier: Modifier, onBrowseLibrary: () -> Unit) {
     Column(
         modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
@@ -121,9 +124,7 @@ private fun EmptyPlayer(modifier: Modifier, onLoadTestTracks: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (BuildConfig.DEBUG) {   // dev-only convenience; never shown to release users
-            Button(onClick = onLoadTestTracks) { Text("Load test tracks") }
-        }
+        Button(onClick = onBrowseLibrary) { Text("Go to Library") }
     }
 }
 

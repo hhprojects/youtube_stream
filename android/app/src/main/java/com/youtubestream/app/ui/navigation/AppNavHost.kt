@@ -94,7 +94,17 @@ fun AppNavHost(container: AppContainer) {
             }
             composable("import") { ImportScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
             composable(Dest.Player.route) {
-                PlayerScreen(connection = connection, modifier = Modifier.fillMaxSize())
+                PlayerScreen(
+                    connection = connection,
+                    onBrowseLibrary = {
+                        nav.navigate(Dest.Library.route) {
+                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
