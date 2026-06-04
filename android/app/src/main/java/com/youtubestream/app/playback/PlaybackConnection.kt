@@ -20,15 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** One simple track description the UI can hand to the player. */
-data class PlayableTrack(
-    val mediaId: String,
-    val uri: String,
-    val title: String,
-    val artist: String,
-    val artworkUri: String? = null,
-)
-
 /**
  * The UI's only door to playback. Connects a [MediaController] to [PlaybackService],
  * mirrors player events into [state], and exposes control methods. Main-thread-confined.
