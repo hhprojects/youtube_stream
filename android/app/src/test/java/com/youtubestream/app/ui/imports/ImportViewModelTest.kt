@@ -12,6 +12,8 @@ import com.youtubestream.app.data.remote.dto.LibrarySongDto
 import com.youtubestream.app.data.remote.dto.SearchRequestDto
 import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.ImportItemState
+import com.youtubestream.app.data.network.ReachabilitySource
+import com.youtubestream.app.data.network.ServerStatus
 import com.youtubestream.app.data.repository.Importer
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
@@ -20,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -64,16 +67,23 @@ class ImportViewModelTest {
     private fun piDto(id: String) =
         LibrarySongDto(id, "T$id", "A$id", "Unknown", "$id.m4a", "http://pi/downloads/$id.m4a", 1L, "d")
 
+    private fun fakeReachability() = object : ReachabilitySource {
+        override val status: StateFlow<ServerStatus> = MutableStateFlow(ServerStatus.REACHABLE)
+        override suspend fun probe() {}
+    }
+
     // Extension on TestScope so the app-scoped manager runs on backgroundScope (driven by runCurrent()).
     private fun TestScope.vm(
         pi: List<LibrarySongDto> = emptyList(),
         local: List<LibrarySong> = emptyList(),
         importer: Importer = Importer { emptyFlow() },
         onDelete: suspend (String) -> DeleteResponseDto = { error("unused") },
+        reachability: ReachabilitySource = fakeReachability(),
     ) = ImportViewModel(
         pi = PiLibraryRepository(fakeApi({ LibraryResponseDto(pi) }, onDelete)),
         library = LibraryRepository(FakeDao(local)),
         importManager = ImportDownloadManager(importer, backgroundScope),
+        reachability = reachability,
     )
 
     @Test fun importableIsPiMinusLocal() = runTest {
@@ -141,6 +151,7 @@ class ImportViewModelTest {
             pi = PiLibraryRepository(fakeApi(onLibrary = { LibraryResponseDto(listOf(piDto("s1"), piDto("s2"))) })),
             library = LibraryRepository(dao),
             importManager = ImportDownloadManager(importer, backgroundScope),
+            reachability = fakeReachability(),
         )
         backgroundScope.launch { vm.state.collect {} }
         runCurrent()

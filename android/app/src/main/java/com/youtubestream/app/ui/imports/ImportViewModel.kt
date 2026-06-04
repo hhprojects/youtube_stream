@@ -3,6 +3,8 @@ package com.youtubestream.app.ui.imports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.model.PiSong
+import com.youtubestream.app.data.network.ReachabilitySource
+import com.youtubestream.app.data.network.ServerStatus
 import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.ImportItemState
 import com.youtubestream.app.data.repository.LibraryRepository
@@ -24,6 +26,7 @@ class ImportViewModel(
     private val pi: PiLibraryRepository,
     private val library: LibraryRepository,
     private val importManager: ImportDownloadManager,
+    private val reachability: ReachabilitySource,
 ) : ViewModel() {
 
     private val _pi = MutableStateFlow<UiState<List<PiSong>>>(UiState.Loading)
@@ -51,6 +54,12 @@ class ImportViewModel(
     // One-shot user-facing errors (e.g. a failed Pi delete). The screen collects this into a toast.
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errors: SharedFlow<String> = _errors
+
+    /** App-wide Pi reachability — the screen shows a banner and gates Pi actions on this. */
+    val status: StateFlow<ServerStatus> = reachability.status
+
+    /** Probe on screen entry so the gate reflects the Pi before the user acts. */
+    fun onEnter() { viewModelScope.launch { reachability.probe() } }
 
     init { refresh() }
 

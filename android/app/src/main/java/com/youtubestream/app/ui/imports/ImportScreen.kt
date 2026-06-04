@@ -37,22 +37,26 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.youtubestream.app.data.model.PiSong
+import com.youtubestream.app.data.network.allowsPiActions
 import com.youtubestream.app.data.repository.ImportItemState
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
+import com.youtubestream.app.ui.components.ServerStatusBanner
 
 @Composable
 fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
-    val vm = appViewModel { ImportViewModel(it.piLibraryRepository, it.libraryRepository, it.importDownloadManager) }
+    val vm = appViewModel { ImportViewModel(it.piLibraryRepository, it.libraryRepository, it.importDownloadManager, it.serverReachability) }
     val state by vm.state.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val status by vm.status.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<PiSong?>(null) }
 
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         vm.errors.collect { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
     }
+    LaunchedEffect(Unit) { vm.onEnter() }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -61,6 +65,8 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
             Text("Import from Pi", style = MaterialTheme.typography.titleLarge)
         }
+
+        ServerStatusBanner(status, onRetry = { vm.onEnter() })
 
         Box(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
             when (val s = state) {
@@ -78,6 +84,7 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 song = song,
                                 checked = song.id in selected,
                                 progress = downloads[song.id],
+                                canDelete = status.allowsPiActions,
                                 onToggle = { vm.toggle(song.id) },
                                 onDelete = { pendingDelete = song },
                             )
@@ -91,7 +98,7 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         if (s is UiState.Content && s.data.isNotEmpty()) {
             Button(
                 onClick = { vm.downloadSelected(s.data) },
-                enabled = selected.isNotEmpty(),
+                enabled = selected.isNotEmpty() && status.allowsPiActions,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (selected.isEmpty()) "Select songs to import" else "Download ${selected.size}")
@@ -126,6 +133,7 @@ private fun ImportRow(
     song: PiSong,
     checked: Boolean,
     progress: ImportItemState?,
+    canDelete: Boolean,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -152,7 +160,7 @@ private fun ImportRow(
             )
             null -> {}
         }
-        IconButton(onClick = onDelete) {
+        IconButton(onClick = onDelete, enabled = canDelete) {
             Icon(Icons.Filled.Delete, contentDescription = "Delete from Pi")
         }
     }
