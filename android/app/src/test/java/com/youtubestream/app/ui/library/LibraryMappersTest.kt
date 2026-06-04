@@ -21,4 +21,10 @@ class LibraryMappersTest {
         val track = song("/songs/My Song #1.m4a").toPlayableTrack()
         assertEquals("file:/songs/My%20Song%20%231.m4a", track.uri)
     }
+
+    @Test fun mapsArtworkUrl() {
+        val track = LibrarySong("v1", "T", "A", 0, "f.m4a", "/songs/f.m4a", 1L, 1L, "http://img/v1.jpg")
+            .toPlayableTrack()
+        assertEquals("http://img/v1.jpg", track.artworkUri)
+    }
 }

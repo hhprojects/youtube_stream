@@ -14,4 +14,5 @@ fun LibrarySong.toPlayableTrack(): PlayableTrack = PlayableTrack(
     uri = File(localPath).toURI().toString(),
     title = title,
     artist = artist,
+    artworkUri = artworkUrl,
 )
