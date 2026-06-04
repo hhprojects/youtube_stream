@@ -51,11 +51,12 @@ class DownloadRepositoryTest {
         val songsDir = File.createTempFile("songs", "").let { it.delete(); it.mkdirs(); it }
         val repo = DownloadRepository(api, OkHttpClient(), dao, songsDir) { server.url("/").toString() }
 
-        val states = repo.download("v1", "T").toList()
+        val states = repo.download("v1", "T", "http://img/v1.jpg").toList()
 
         assertTrue(states.any { it is DownloadState.InProgress })   // progress emitted
         val done = states.last() as DownloadState.Completed
         assertEquals("v1", done.song.id)
+        assertEquals("http://img/v1.jpg", done.song.artworkUrl)     // thumbnail persisted onto the row
         assertTrue(File(songsDir, "v1.m4a").exists())               // file written
         assertEquals(listOf(done.song), dao.songs.value)           // row inserted
         server.shutdown()

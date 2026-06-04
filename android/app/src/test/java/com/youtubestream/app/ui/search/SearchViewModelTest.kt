@@ -65,12 +65,12 @@ class SearchViewModelTest {
 
     private fun vmWith(
         onSearch: suspend (String) -> SearchResponseDto = { error("search unused") },
-        downloader: (String, String) -> Flow<DownloadState> = { _, _ -> emptyFlow() },
+        downloader: (String, String, String?) -> Flow<DownloadState> = { _, _, _ -> emptyFlow() },
         dao: FakeDao = FakeDao(),
         reachability: ReachabilitySource = fakeReachability(),
     ) = SearchViewModel(
         repo = SearchRepository(fakeApi(onSearch)),
-        downloader = { id, title -> downloader(id, title) },
+        downloader = { id, title, artwork -> downloader(id, title, artwork) },
         library = LibraryRepository(dao),
         reachability = reachability,
     )
@@ -112,7 +112,7 @@ class SearchViewModelTest {
 
     @Test fun downloadTracksProgressThenClearsWhenComplete() = runTest {
         val channel = Channel<DownloadState>(Channel.UNLIMITED)
-        val vm = vmWith(downloader = { _, _ -> channel.receiveAsFlow() })
+        val vm = vmWith(downloader = { _, _, _ -> channel.receiveAsFlow() })
         vm.download(SearchResult("v1", "Title", "Chan", null, null))
         runCurrent()
 
@@ -130,7 +130,7 @@ class SearchViewModelTest {
 
     @Test fun downloadFailureMarksRowFailed() = runTest {
         val channel = Channel<DownloadState>(Channel.UNLIMITED)
-        val vm = vmWith(downloader = { _, _ -> channel.receiveAsFlow() })
+        val vm = vmWith(downloader = { _, _, _ -> channel.receiveAsFlow() })
         vm.download(SearchResult("v2", "T", "C", null, null))
         runCurrent()
         channel.send(DownloadState.Failed(RuntimeException("boom")))

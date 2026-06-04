@@ -35,7 +35,7 @@ class DownloadRepository(
 ) : Downloader, Importer {
 
     /** Two-step: POST /api/download (yt-dlp fetches from YouTube), then stream the new file in. */
-    override fun download(videoId: String, title: String): Flow<DownloadState> = flow {
+    override fun download(videoId: String, title: String, artworkUrl: String?): Flow<DownloadState> = flow {
         var target: File? = null
         try {
             val meta = api.download(DownloadRequestDto(videoId, title))   // may 500 → caught, not a crash
@@ -51,6 +51,7 @@ class DownloadRepository(
                 localPath = target.absolutePath,
                 size = meta.size,
                 dateAdded = System.currentTimeMillis(),
+                artworkUrl = artworkUrl,
             )
             dao.insert(song)
             emit(DownloadState.Completed(song))

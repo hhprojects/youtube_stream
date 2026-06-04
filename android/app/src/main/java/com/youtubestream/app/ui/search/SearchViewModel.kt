@@ -75,7 +75,7 @@ class SearchViewModel(
         // and so the guard above blocks repeat taps during that window.
         _downloads.update { it + (result.id to ItemDownload.Downloading(0f)) }
         viewModelScope.launch {
-            downloader.download(result.id, result.title).collect { st ->
+            downloader.download(result.id, result.title, result.thumbnailUrl).collect { st ->
                 _downloads.update { current ->
                     when (st) {
                         is DownloadState.InProgress ->

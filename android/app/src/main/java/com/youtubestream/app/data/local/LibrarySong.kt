@@ -14,4 +14,5 @@ data class LibrarySong(
     val localPath: String,
     val size: Long,
     val dateAdded: Long,
+    val artworkUrl: String? = null,   // remote YouTube thumbnail; null for imported songs
 )
