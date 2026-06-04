@@ -55,11 +55,12 @@ class ImportViewModel(
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errors: SharedFlow<String> = _errors
 
-    /** App-wide Pi reachability — the screen shows a banner and gates Pi actions on this. */
+    /**
+     * App-wide Pi reachability — the screen shows a banner and gates Pi actions on this. No dedicated probe
+     * on entry: [refresh] below already does GET /api/library (now fast-connect), which the interceptor turns
+     * into a reachability report — so a separate probe would just be a duplicate call.
+     */
     val status: StateFlow<ServerStatus> = reachability.status
-
-    /** Probe on screen entry so the gate reflects the Pi before the user acts. */
-    fun onEnter() { viewModelScope.launch { reachability.probe() } }
 
     init { refresh() }
 

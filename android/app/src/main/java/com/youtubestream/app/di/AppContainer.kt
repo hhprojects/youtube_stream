@@ -52,15 +52,19 @@ class AppContainer(context: Context) {
     // while this initializer's probeAction references api (built from apiClient).
     val serverReachability: ServerReachability = ServerReachability(connectivity, appScope, probeAction = { api.library() })
 
+    // Short CONNECT timeout (~5s): an unreachable/powered-off host stalls only the TCP handshake, so fail it
+    // fast — that's what makes the reachability probe (and search/delete) react quickly instead of hanging
+    // ~30s. READ stays 30s, so a live-but-slow Pi (slow to build a response) still succeeds and is never
+    // mis-reported as offline. (Tailscale cold-starts are usually well under 5s; Retry covers the rest.)
     private val apiClient = OkHttpClient.Builder()
         .addInterceptor(BaseUrlInterceptor { currentUrl })
         .addInterceptor(ServerReachabilityInterceptor { ok -> serverReachability.report(ok) })
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     // The /api/download POST blocks while yt-dlp fetches from YouTube — that can take minutes, so it
-    // needs a long read timeout. A separate client keeps search/library on 30s (they should fail fast).
+    // needs a long read timeout. A separate client keeps search/library fast-failing (they should fail fast).
     private val downloadClient = OkHttpClient.Builder()
         .addInterceptor(BaseUrlInterceptor { currentUrl })
         .connectTimeout(30, TimeUnit.SECONDS)

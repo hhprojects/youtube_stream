@@ -22,8 +22,8 @@ import com.youtubestream.app.data.network.ServerStatus
 @Composable
 fun ServerStatusBanner(status: ServerStatus, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     val message = when (status) {
-        ServerStatus.DEVICE_OFFLINE -> "You're offline. Connect to Wi-Fi to search & download."
-        ServerStatus.SERVER_UNREACHABLE -> "Can't reach your server — is the Pi on?"
+        ServerStatus.DEVICE_OFFLINE -> "No internet connection"
+        ServerStatus.SERVER_UNREACHABLE -> "Can't reach the server"
         ServerStatus.REACHABLE, ServerStatus.CHECKING -> return   // nothing to show
     }
     Surface(

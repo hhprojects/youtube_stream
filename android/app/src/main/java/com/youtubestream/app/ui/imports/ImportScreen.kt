@@ -56,7 +56,6 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         vm.errors.collect { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
     }
-    LaunchedEffect(Unit) { vm.onEnter() }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -66,7 +65,7 @@ fun ImportScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             Text("Import from Pi", style = MaterialTheme.typography.titleLarge)
         }
 
-        ServerStatusBanner(status, onRetry = { vm.onEnter() })
+        ServerStatusBanner(status, onRetry = { vm.refresh() })
 
         Box(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
             when (val s = state) {
