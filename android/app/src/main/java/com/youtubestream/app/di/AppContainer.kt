@@ -3,6 +3,9 @@ package com.youtubestream.app.di
 import android.content.Context
 import androidx.room.Room
 import com.youtubestream.app.data.local.AppDatabase
+import com.youtubestream.app.data.network.ConnectivityObserver
+import com.youtubestream.app.data.network.ServerReachability
+import com.youtubestream.app.data.network.ServerReachabilityInterceptor
 import com.youtubestream.app.data.remote.BaseUrlInterceptor
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.repository.DownloadRepository
@@ -18,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -40,8 +44,16 @@ class AppContainer(context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Reachability: device connectivity + a Pi probe (GET /api/library), merged into one app-wide status.
+    // Declared before apiClient because the interceptor below calls serverReachability.report(...).
+    val connectivity = ConnectivityObserver(context)
+    // Explicit type breaks a type-inference cycle: apiClient's interceptor calls serverReachability.report,
+    // while this initializer's probeAction references api (built from apiClient).
+    val serverReachability: ServerReachability = ServerReachability(connectivity, appScope, probeAction = { api.library() })
+
     private val apiClient = OkHttpClient.Builder()
         .addInterceptor(BaseUrlInterceptor { currentUrl })
+        .addInterceptor(ServerReachabilityInterceptor { ok -> serverReachability.report(ok) })
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
@@ -96,5 +108,9 @@ class AppContainer(context: Context) {
         playbackConnection.errors
             .onEach { id -> libraryRepository.deleteById(id) }
             .launchIn(playbackScope)
+
+        // One probe at startup so the banner/gating reflect the Pi before the user touches anything.
+        // Placed in this (final) init block so every property — including `api` — is initialized first.
+        appScope.launch { serverReachability.probe() }
     }
 }
