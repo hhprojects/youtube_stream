@@ -20,11 +20,19 @@ class MediaWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action in WidgetIntents.COMMAND_ACTIONS) {
             val connection = (context.applicationContext as App).container.playbackConnection
-            // Warm path: the controller is connected, so run the command now (main thread).
+            val action = intent.action
             if (connection.state.value.isConnected) {
-                connection.dispatchWidgetAction(intent.action)
+                // Warm: run now (main thread).
+                connection.dispatchWidgetAction(action)
+            } else {
+                // Cold: the process just started and connect() is still async. Hold the receiver
+                // alive with goAsync() and let the connection apply the command after it restores
+                // the last queue, then finish().
+                val pendingResult = goAsync()
+                connection.runWhenReady(onApplied = { pendingResult.finish() }) {
+                    dispatchWidgetAction(action)
+                }
             }
-            // Cold path (process was killed) is handled in Task 7.
             return
         }
         super.onReceive(context, intent)   // let AppWidgetProvider dispatch APPWIDGET_UPDATE → onUpdate

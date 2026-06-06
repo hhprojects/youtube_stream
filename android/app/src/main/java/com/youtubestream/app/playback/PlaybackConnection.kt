@@ -56,6 +56,10 @@ class PlaybackConnection(
     /** Debounces queue/position writes so a burst of player events collapses into one save. */
     private var saveJob: Job? = null
 
+    /** One-slot deferred command (a widget tap that arrived before connect finished) + its callback. */
+    private var pendingAction: (PlaybackController.() -> Unit)? = null
+    private var pendingOnApplied: (() -> Unit)? = null
+
     fun connect() {
         if (controller != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
@@ -66,7 +70,7 @@ class PlaybackConnection(
             c.addListener(playerListener)
             pushState()
             startPositionLoop()
-            restoreQueueIfEmpty()
+            restoreQueueThenFlush()
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -193,6 +197,22 @@ class PlaybackConnection(
         c.repeatMode = RepeatModeMapper.toPlayer(RepeatModeMapper.next(RepeatModeMapper.toApp(c.repeatMode)))
     }
 
+    /**
+     * Run [action] now if the controller is connected, else stash it (one slot) and run it once
+     * [connect] has wired the controller and restored the queue. [onApplied] fires right after the
+     * action runs — the widget uses it to release its goAsync receiver once the cold-start tap took
+     * effect. Last write wins if two taps arrive while still disconnected.
+     */
+    fun runWhenReady(onApplied: (() -> Unit)? = null, action: PlaybackController.() -> Unit) {
+        if (controller != null) {
+            action(this)
+            onApplied?.invoke()
+        } else {
+            pendingAction = action
+            pendingOnApplied = onApplied
+        }
+    }
+
     // --- Cross-session persistence ---
 
     /** Persist now, capturing the snapshot at call time so a later change can't alter what we write. */
@@ -229,25 +249,45 @@ class PlaybackConnection(
 
     /**
      * On connect, if the service has no live queue (the process had been killed), rehydrate the last
-     * session's queue — seeked to where the user left off, but paused. Never auto-plays.
+     * session's queue — seeked to where the user left off, but paused. Never auto-plays. Then flush any
+     * pending widget command. flushPending runs on every path (incl. no-saved-queue) so a cold-start
+     * widget tap is never stranded.
      */
-    private fun restoreQueueIfEmpty() {
+    private fun restoreQueueThenFlush() {
         val c = controller ?: return
-        if (c.mediaItemCount > 0) return                 // service survived with a live queue — leave it
-        scope.launch {
-            val saved = queueStore.load() ?: return@launch
-            if (saved.tracks.isEmpty()) return@launch
-            if (c.mediaItemCount > 0) return@launch       // a song was picked while load() suspended — don't clobber
-            currentQueue = saved.tracks
-            val startIndex = saved.currentIndex.coerceIn(0, saved.tracks.lastIndex)
-            c.setMediaItems(
-                saved.tracks.map { it.toMediaItem() },
-                startIndex,
-                saved.positionMs.coerceAtLeast(0L),
-            )
-            c.prepare()                                   // buffer & show it, but stay paused (no play())
-            pushState()
+        if (c.mediaItemCount > 0) {                       // service survived with a live queue — leave it
+            flushPending()
+            return
         }
+        scope.launch {
+            try {
+                val saved = queueStore.load()
+                // mediaItemCount == 0 guard: a song may have been picked while load() suspended — don't clobber.
+                if (saved != null && saved.tracks.isNotEmpty() && c.mediaItemCount == 0) {
+                    currentQueue = saved.tracks
+                    val startIndex = saved.currentIndex.coerceIn(0, saved.tracks.lastIndex)
+                    c.setMediaItems(
+                        saved.tracks.map { it.toMediaItem() },
+                        startIndex,
+                        saved.positionMs.coerceAtLeast(0L),
+                    )
+                    c.prepare()                           // buffer & show it, but stay paused (no play())
+                    pushState()
+                }
+            } finally {
+                flushPending()
+            }
+        }
+    }
+
+    /** Run and clear the one-slot deferred command, then signal completion. */
+    private fun flushPending() {
+        val action = pendingAction ?: return
+        pendingAction = null
+        val onApplied = pendingOnApplied
+        pendingOnApplied = null
+        action(this)
+        onApplied?.invoke()
     }
 }
 
