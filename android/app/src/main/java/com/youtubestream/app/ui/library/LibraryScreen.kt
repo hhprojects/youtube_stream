@@ -8,17 +8,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.youtubestream.app.data.local.LibrarySong
+import com.youtubestream.app.data.util.YouTubeUrl
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.SongArtwork
@@ -43,6 +47,7 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
     val vm = appViewModel { LibraryViewModel(it.libraryRepository, it.piLibraryRepository, it.playbackConnection) }
     val state by vm.state.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<LibrarySong?>(null) }
+    var editing by remember { mutableStateOf<LibrarySong?>(null) }
 
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -65,6 +70,7 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
                         LibraryRow(
                             song = song,
                             onPlay = { vm.play(s.data, index) },
+                            onEdit = { editing = song },
                             onDelete = { pendingDelete = song },
                         )
                     }
@@ -99,10 +105,45 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
             },
         )
     }
+
+    editing?.let { song ->
+        var url by remember(song) { mutableStateOf("") }
+        val videoId = YouTubeUrl.extractVideoId(url)
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Edit artwork") },
+            text = {
+                Column {
+                    Text("Paste a YouTube link — the artwork becomes that video's thumbnail.")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        singleLine = true,
+                        isError = url.isNotBlank() && videoId == null,
+                        placeholder = { Text("https://youtu.be/…") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (videoId != null) {
+                        Spacer(Modifier.height(8.dp))
+                        SongArtwork("https://i.ytimg.com/vi/$videoId/hqdefault.jpg", size = 96.dp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = videoId != null, onClick = { vm.editArtwork(song, url); editing = null }) {
+                    Text("Update")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = null }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable
-private fun LibraryRow(song: LibrarySong, onPlay: () -> Unit, onDelete: () -> Unit) {
+private fun LibraryRow(song: LibrarySong, onPlay: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     Surface(
         onClick = onPlay,
         modifier = Modifier.fillMaxWidth(),
@@ -118,6 +159,9 @@ private fun LibraryRow(song: LibrarySong, onPlay: () -> Unit, onDelete: () -> Un
             Column(Modifier.weight(1f)) {
                 Text(song.title, maxLines = 1)
                 Text(song.artist, maxLines = 1)
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Filled.Edit, contentDescription = "Edit artwork")
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Filled.Delete, contentDescription = "Delete")
