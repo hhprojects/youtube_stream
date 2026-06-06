@@ -66,6 +66,7 @@ class LibraryViewModelTest {
             override suspend fun download(body: DownloadRequestDto) = error("unused")
             override suspend fun library() = error("unused")
             override suspend fun deleteFromPi(filename: String) = onDelete(filename)
+            override suspend fun updateArtwork(filename: String, body: com.youtubestream.app.data.remote.dto.ArtworkRequestDto) = error("unused")
         })
 
     @Test fun exposesLibraryAsContent() = runTest {

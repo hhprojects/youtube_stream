@@ -47,4 +47,11 @@ data class LibrarySongDto(
     val downloadUrl: String,        // absolute
     val size: Long,
     val dateAdded: String,          // ISO date string (Express-serialized Date)
+    val thumbnail: String? = null,  // ytimg URL derived from the Pi sidecar; null when unknown
 )
+
+@Serializable
+data class ArtworkRequestDto(val videoId: String)
+
+@Serializable
+data class ArtworkResponseDto(val success: Boolean, val thumbnail: String? = null)
