@@ -65,6 +65,7 @@ import com.youtubestream.app.playback.QueueItem
 fun PlayerScreen(
     connection: PlaybackConnection,
     onMinimize: () -> Unit,
+    onStop: () -> Unit,
     onBrowseLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -86,7 +87,7 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item { PlayerHeader(onMinimize = onMinimize, onStop = { connection.stop(); onMinimize() }) }
+            item { PlayerHeader(onMinimize = onMinimize, onStop = onStop) }
             item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
             item { TrackInfo(state.title, state.artist) }
             item { Scrubber(state) { ms -> connection.seekTo(ms) } }

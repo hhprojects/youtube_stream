@@ -106,6 +106,7 @@ fun PlayerSheet(
             PlayerScreen(
                 connection = connection,
                 onMinimize = { scope.launch { sheet.collapse() } },
+                onStop = { scope.launch { sheet.collapse(); connection.stop() } },
                 onBrowseLibrary = { scope.launch { sheet.collapse() } },
                 modifier = Modifier
                     .fillMaxSize()
