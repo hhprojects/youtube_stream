@@ -88,7 +88,7 @@ class DownloadRepositoryTest {
     }
 
     @Test
-    fun importStoresResolvedArtwork() = runTest {
+    fun importUsesPiThumbnail() = runTest {
         val server = MockWebServer().apply { start() }
         val fileUrl = server.url("/downloads/s1.m4a").toString()
         server.enqueue(MockResponse().setBody("DATA"))
@@ -99,13 +99,12 @@ class DownloadRepositoryTest {
             .build().create(YoutubeStreamApi::class.java)
         val dao = FakeDao()
         val songsDir = File.createTempFile("songs", "").let { it.delete(); it.mkdirs(); it }
-        val repo = DownloadRepository(api, OkHttpClient(), dao, songsDir,
-            lookupArtwork = { "http://img/imported.jpg" }) { server.url("/").toString() }
+        val repo = DownloadRepository(api, OkHttpClient(), dao, songsDir) { server.url("/").toString() }
 
-        val piSong = PiSong("s1", "T", "A", "s1.m4a", fileUrl, 4L)
+        val piSong = PiSong("s1", "T", "A", "s1.m4a", fileUrl, 4L, thumbnailUrl = "http://i/s1.jpg")
         val done = repo.importSong(piSong).toList().last() as DownloadState.Completed
 
-        assertEquals("http://img/imported.jpg", done.song.artworkUrl)   // resolved via the lookup seam
+        assertEquals("http://i/s1.jpg", done.song.artworkUrl)   // taken straight from the Pi, no guess
         server.shutdown()
     }
 }
