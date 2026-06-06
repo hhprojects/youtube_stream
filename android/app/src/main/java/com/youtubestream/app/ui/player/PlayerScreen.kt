@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -28,6 +30,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +64,8 @@ import com.youtubestream.app.playback.QueueItem
 @Composable
 fun PlayerScreen(
     connection: PlaybackConnection,
+    onMinimize: () -> Unit,
+    onStop: () -> Unit,
     onBrowseLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -81,13 +87,39 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item { Spacer(Modifier.height(8.dp)) }
+            item { PlayerHeader(onMinimize = onMinimize, onStop = onStop) }
             item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
             item { TrackInfo(state.title, state.artist) }
             item { Scrubber(state) { ms -> connection.seekTo(ms) } }
             item { Controls(state, connection) }
             item { UpNextHeader(upNext.size, expanded) { expanded = !expanded } }
             if (expanded) items(upNext, key = { it.mediaId }) { item -> UpNextRow(item) }
+        }
+    }
+}
+
+/** Header for the expanded player: minimize chevron (left) + overflow ⋮ with Stop (right). */
+@Composable
+private fun PlayerHeader(onMinimize: () -> Unit, onStop: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onMinimize) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Minimize")
+        }
+        Spacer(Modifier.weight(1f))
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Stop") },
+                    onClick = { menuOpen = false; onStop() },
+                )
+            }
         }
     }
 }

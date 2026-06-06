@@ -25,4 +25,8 @@ class QueueDataStore(private val context: Context) : QueueStore {
     override suspend fun save(queue: PersistedQueue) {
         context.queueDataStore.edit { prefs -> prefs[queueKey] = QueueSerializer.encode(queue) }
     }
+
+    override suspend fun clear() {
+        context.queueDataStore.edit { prefs -> prefs.remove(queueKey) }
+    }
 }
