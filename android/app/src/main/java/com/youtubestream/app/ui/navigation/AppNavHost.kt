@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -32,6 +33,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.youtubestream.app.di.AppContainer
 import com.youtubestream.app.ui.components.MiniPlayer
+import com.youtubestream.app.ui.home.HomeScreen
 import com.youtubestream.app.ui.imports.ImportScreen
 import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.player.PlayerScreen
@@ -39,6 +41,7 @@ import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
 
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
+    Home("home", "Home", Icons.Filled.Home),
     Search("search", "Search", Icons.Filled.Search),
     Library("library", "Library", Icons.Filled.LibraryMusic),
     Player("player", "Player", Icons.Filled.PlayArrow),
@@ -124,7 +127,8 @@ fun AppNavHost(
             }
         },
     ) { padding ->
-        NavHost(nav, startDestination = Dest.Search.route, modifier = Modifier.padding(padding)) {
+        NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding)) {
+            composable(Dest.Home.route) { HomeScreen(Modifier.fillMaxSize()) }
             composable(Dest.Search.route) { SearchScreen(Modifier.fillMaxSize()) }
             composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
             composable(Dest.Library.route) {
