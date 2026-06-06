@@ -1,5 +1,7 @@
 package com.youtubestream.app.ui.navigation
 
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -13,7 +15,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import android.widget.Toast
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -22,12 +23,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -42,6 +45,7 @@ import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
+import kotlinx.coroutines.launch
 
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
     Search("search", "Search", Icons.Filled.Search),
@@ -62,6 +66,7 @@ fun AppNavHost(
     val route = current?.destination
 
     val sheet = rememberPlayerSheetState()
+    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val peekHeightPx = with(density) { 62.dp.roundToPx() }   // art 44 + 16 vpad + 2dp line
     var navBarHeightPx by remember { mutableIntStateOf(with(density) { 80.dp.roundToPx() }) }
@@ -79,6 +84,9 @@ fun AppNavHost(
             onPlayerOpened()
         }
     }
+
+    // System/predictive back collapses the expanded player instead of leaving the app.
+    BackHandler(enabled = sheet.isExpanded) { scope.launch { sheet.collapse() } }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
@@ -100,7 +108,12 @@ fun AppNavHost(
                 }
             },
             bottomBar = {
-                NavigationBar(Modifier.onSizeChanged { navBarHeightPx = it.height }) {
+                // Slides down off-screen as the sheet expands (progress 0→1).
+                NavigationBar(
+                    Modifier
+                        .onSizeChanged { navBarHeightPx = it.height }
+                        .graphicsLayer { translationY = sheet.progress * navBarHeightPx },
+                ) {
                     Dest.entries.forEach { dest ->
                         NavigationBarItem(
                             selected = route?.hierarchy?.any { it.route == dest.route } == true,
