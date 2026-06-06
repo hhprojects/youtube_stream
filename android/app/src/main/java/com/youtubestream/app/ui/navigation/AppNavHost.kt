@@ -134,6 +134,7 @@ fun AppNavHost(
             composable(Dest.Player.route) {
                 PlayerScreen(
                     connection = connection,
+                    onMinimize = { nav.popBackStack() },
                     onBrowseLibrary = {
                         nav.navigate(Dest.Library.route) {
                             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
