@@ -48,6 +48,7 @@ class SearchViewModelTest {
         override suspend fun download(body: DownloadRequestDto) = error("unused")
         override suspend fun library(): LibraryResponseDto = error("unused")
         override suspend fun deleteFromPi(filename: String) = error("unused")
+        override suspend fun updateArtwork(filename: String, body: com.youtubestream.app.data.remote.dto.ArtworkRequestDto) = error("unused")
     }
 
     private class FakeDao(initial: List<LibrarySong> = emptyList()) : LibraryDao {
@@ -56,6 +57,7 @@ class SearchViewModelTest {
         override suspend fun exists(id: String) = songs.value.any { it.id == id }
         override suspend fun insert(song: LibrarySong) = songs.update { it + song }
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
+        override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
     }
 
     private fun fakeReachability() = object : ReachabilitySource {

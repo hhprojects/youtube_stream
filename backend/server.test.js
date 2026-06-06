@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads } = require('./server');
+const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId } = require('./server');
 
 test('YOUTUBE_ID_REGEX accepts standard ids', () => {
   assert.ok(YOUTUBE_ID_REGEX.test('dQw4w9WgXcQ'));
@@ -82,6 +82,53 @@ test('pruneDownloads ignores non-audio files', () => {
     // song.m4a counted and pruned; notes.txt untouched
     assert.ok(!fs.existsSync(path.join(tmp, 'song.m4a')));
     assert.ok(fs.existsSync(path.join(tmp, 'notes.txt')));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('thumbnailUrl builds a CDN url, or null without an id', () => {
+  assert.equal(thumbnailUrl('dQw4w9WgXcQ'), 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+  assert.equal(thumbnailUrl(null), null);
+  assert.equal(thumbnailUrl(undefined), null);
+});
+
+test('sidecarPathFor swaps the audio extension for .json', () => {
+  assert.equal(sidecarPathFor('/d', 'a b.m4a'), path.join('/d', 'a b.json'));
+  assert.equal(sidecarPathFor('/d', 'x.mp3'), path.join('/d', 'x.json'));
+});
+
+test('writeVideoId / readVideoId round-trip a sidecar', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'art-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'song.m4a'), Buffer.alloc(10));
+    writeVideoId(tmp, 'song.m4a', 'dQw4w9WgXcQ');
+    assert.ok(fs.existsSync(path.join(tmp, 'song.json')));
+    assert.equal(readVideoId(tmp, 'song.m4a'), 'dQw4w9WgXcQ');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('readVideoId returns null for a missing or malformed sidecar', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'art-'));
+  try {
+    assert.equal(readVideoId(tmp, 'missing.m4a'), null);
+    fs.writeFileSync(path.join(tmp, 'bad.json'), 'not json');
+    assert.equal(readVideoId(tmp, 'bad.m4a'), null);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('pruneDownloads removes a pruned file\'s sidecar too', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'art-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'a.m4a'), Buffer.alloc(200));
+    fs.writeFileSync(path.join(tmp, 'a.json'), JSON.stringify({ videoId: 'x' }));
+    pruneDownloads(tmp, 100);
+    assert.ok(!fs.existsSync(path.join(tmp, 'a.m4a')));
+    assert.ok(!fs.existsSync(path.join(tmp, 'a.json')));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

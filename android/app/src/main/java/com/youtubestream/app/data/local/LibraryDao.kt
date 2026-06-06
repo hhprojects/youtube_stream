@@ -20,4 +20,8 @@ interface LibraryDao {
 
     @Query("DELETE FROM library_songs WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    /** One-time cleanup: blanks every row's artwork so wrong guesses show the placeholder instead. */
+    @Query("UPDATE library_songs SET artworkUrl = NULL")
+    suspend fun clearAllArtwork()
 }

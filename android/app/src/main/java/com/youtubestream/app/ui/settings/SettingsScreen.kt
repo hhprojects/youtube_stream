@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,10 +33,11 @@ import com.youtubestream.app.ui.appViewModel
 
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
-    val vm = appViewModel { SettingsViewModel(it.settings, it.piLibraryRepository) }
+    val vm = appViewModel { SettingsViewModel(it.settings, it.piLibraryRepository, it.libraryRepository) }
     val saved by vm.serverUrl.collectAsStateWithLifecycle()
     val test by vm.test.collectAsStateWithLifecycle()
     var field by remember { mutableStateOf(saved) }
+    var confirmReset by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     // Sync the field once the persisted value arrives.
@@ -74,6 +79,29 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 is TestResult.Ok -> "✓ Connected — library has ${t.count} songs"
                 is TestResult.Failed -> "✗ ${t.message}"
             }
+        )
+
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text("Artwork")
+        OutlinedButton(onClick = { confirmReset = true }) { Text("Reset all artwork to placeholder") }
+        Text(
+            "Clears the saved image from every song (use after fixing the wrong-art problem). " +
+                "New downloads get correct art automatically; fix individual songs from the Library.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Reset all artwork?") },
+            text = { Text("Every song will show a placeholder until you set its image again. This can't be undone in bulk.") },
+            confirmButton = {
+                TextButton(onClick = { vm.resetArtwork(); confirmReset = false }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) { Text("Cancel") }
+            },
         )
     }
 }

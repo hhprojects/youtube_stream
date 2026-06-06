@@ -36,4 +36,11 @@ class ApiDtosTest {
         assertEquals("Unknown", parsed.songs[0].duration)
         assertEquals(123L, parsed.songs[0].size)
     }
+
+    @Test
+    fun libraryResponseParsesThumbnail() {
+        val body = """{"songs":[{"id":"s.m4a","title":"T","artist":"A","duration":"Unknown","filename":"s.m4a","downloadUrl":"http://pi/downloads/s.m4a","size":1,"dateAdded":"2026-06-01T00:00:00.000Z","thumbnail":"http://i/x.jpg"}]}"""
+        val parsed = json.decodeFromString<LibraryResponseDto>(body)
+        assertEquals("http://i/x.jpg", parsed.songs[0].thumbnail)
+    }
 }

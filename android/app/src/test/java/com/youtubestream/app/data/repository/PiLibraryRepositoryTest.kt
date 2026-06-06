@@ -33,4 +33,38 @@ class PiLibraryRepositoryTest {
         assertEquals(99L, songs[0].size)
         server.shutdown()
     }
+
+    @Test
+    fun mapsThumbnailFromLibrary() = runTest {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(
+            MockResponse().setBody(
+                """{"songs":[{"id":"s1","title":"T","artist":"A","duration":"Unknown","filename":"s1.m4a","downloadUrl":"http://pi/downloads/s1.m4a","size":99,"dateAdded":"2026-01-01T00:00:00.000Z","thumbnail":"http://i/s1.jpg"}]}"""
+            )
+        )
+        val json = Json { ignoreUnknownKeys = true }
+        val api = Retrofit.Builder().baseUrl(server.url("/"))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build().create(YoutubeStreamApi::class.java)
+
+        val songs = PiLibraryRepository(api).piLibrary()
+
+        assertEquals("http://i/s1.jpg", songs[0].thumbnailUrl)
+        server.shutdown()
+    }
+
+    @Test
+    fun updateArtworkReturnsThumbnail() = runTest {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse().setBody("""{"success":true,"thumbnail":"http://i/new.jpg"}"""))
+        val json = Json { ignoreUnknownKeys = true }
+        val api = Retrofit.Builder().baseUrl(server.url("/"))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build().create(YoutubeStreamApi::class.java)
+
+        val thumb = PiLibraryRepository(api).updateArtwork("s1.m4a", "dQw4w9WgXcQ")
+
+        assertEquals("http://i/new.jpg", thumb)
+        server.shutdown()
+    }
 }
