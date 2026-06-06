@@ -57,6 +57,7 @@ class SearchViewModelTest {
         override suspend fun exists(id: String) = songs.value.any { it.id == id }
         override suspend fun insert(song: LibrarySong) = songs.update { it + song }
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
+        override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
     }
 
     private fun fakeReachability() = object : ReachabilitySource {

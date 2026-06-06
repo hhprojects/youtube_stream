@@ -20,6 +20,7 @@ class LibraryRepositoryTest {
         override suspend fun exists(id: String) = songs.value.any { it.id == id }
         override suspend fun insert(song: LibrarySong) = songs.update { it + song }
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
+        override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
     }
 
     @Test
@@ -46,5 +47,29 @@ class LibraryRepositoryTest {
         repo.deleteById("id1")
 
         assertFalse(dao.exists("id1"))
+    }
+
+    @Test
+    fun setArtworkInsertsRowWithNewUrl() = runTest {
+        val song = LibrarySong("id1", "T", "A", 1, "f.m4a", "/p/f.m4a", 1L, 1L)
+        val dao = FakeDao()
+        val repo = LibraryRepository(dao)
+
+        repo.setArtwork(song, "http://i/new.jpg")
+
+        assertEquals("http://i/new.jpg", dao.songs.value.last().artworkUrl)
+    }
+
+    @Test
+    fun resetAllArtworkClearsEveryUrl() = runTest {
+        val dao = FakeDao(listOf(
+            LibrarySong("a", "T", "A", 1, "a.m4a", "/p/a.m4a", 1L, 1L, "http://i/a.jpg"),
+            LibrarySong("b", "T", "A", 1, "b.m4a", "/p/b.m4a", 1L, 1L, "http://i/b.jpg"),
+        ))
+        val repo = LibraryRepository(dao)
+
+        repo.resetAllArtwork()
+
+        assertEquals(listOf(null, null), dao.songs.value.map { it.artworkUrl })
     }
 }
