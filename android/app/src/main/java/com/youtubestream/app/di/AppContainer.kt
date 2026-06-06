@@ -3,6 +3,7 @@ package com.youtubestream.app.di
 import android.content.Context
 import androidx.room.Room
 import com.youtubestream.app.data.local.AppDatabase
+import com.youtubestream.app.data.local.MIGRATION_3_4
 import com.youtubestream.app.data.network.ConnectivityObserver
 import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
@@ -90,7 +91,8 @@ class AppContainer(context: Context) {
     private val downloadApi = buildApi(downloadClient)  // the slow yt-dlp POST — 300s timeout
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
-        .fallbackToDestructiveMigration(dropAllTables = true)  // rows re-derive from the Pi via Import
+        .addMigrations(MIGRATION_3_4)
+        .fallbackToDestructiveMigration(dropAllTables = true)  // net for unhandled jumps only
         .build()
     private val songsDir = File(context.filesDir, "songs")
 
