@@ -17,6 +17,7 @@ import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsDataStore
 import com.youtubestream.app.playback.PlaybackConnection
+import com.youtubestream.app.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -111,6 +112,9 @@ class AppContainer(context: Context) {
     /** App-scoped: connected once, never released — it lives for the process like the player itself. */
     val playbackConnection =
         PlaybackConnection(context, playbackScope, QueueDataStore(context)).also { it.connect() }
+
+    /** Mirrors playback state onto the home-screen widget. App-scoped; started once, lives for the process. */
+    val widgetUpdater = WidgetUpdater(context, playbackConnection, appScope).also { it.start() }
 
     init {
         // Self-heal: a track that failed to play (missing local file) is pruned from the library.
