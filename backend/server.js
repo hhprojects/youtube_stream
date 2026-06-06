@@ -163,7 +163,7 @@ app.post('/api/download', (req, res) => {
     }
     try {
       const stats = fs.statSync(outputPath);
-      writeVideoId(DOWNLOAD_DIR, `${safeTitle}.m4a`, videoId);
+      try { writeVideoId(DOWNLOAD_DIR, `${safeTitle}.m4a`, videoId); } catch {}  // best-effort: a sidecar miss must not fail a good download
       const parsed = parseArtistTitle(title || safeTitle);
       res.json({
         success: true,
