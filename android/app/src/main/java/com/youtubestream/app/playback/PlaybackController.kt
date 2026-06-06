@@ -16,4 +16,7 @@ interface PlaybackController {
     fun seekTo(positionMs: Long)
     fun toggleShuffle()
     fun cycleRepeat()
+
+    /** Stop playback and clear the queue — the now-playing UI hides (currentMediaId → null). */
+    fun stop()
 }

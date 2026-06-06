@@ -55,6 +55,7 @@ class LibraryViewModelTest {
         override fun seekTo(positionMs: Long) {}
         override fun toggleShuffle() {}
         override fun cycleRepeat() {}
+        override fun stop() {}
     }
 
     private fun song(id: String) = LibrarySong(id, "T$id", "A$id", 0, "$id.m4a", "/songs/$id.m4a", 1L, 1L)

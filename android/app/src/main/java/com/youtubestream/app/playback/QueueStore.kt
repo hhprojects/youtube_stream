@@ -9,4 +9,7 @@ interface QueueStore {
     suspend fun load(): PersistedQueue?
 
     suspend fun save(queue: PersistedQueue)
+
+    /** Forget the saved queue so a restart doesn't rehydrate it (used by stop()). */
+    suspend fun clear()
 }

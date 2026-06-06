@@ -19,6 +19,7 @@ private class RecordingController : PlaybackController {
     override fun seekTo(positionMs: Long) { calls += "seekTo" }
     override fun toggleShuffle() { calls += "toggleShuffle" }
     override fun cycleRepeat() { calls += "cycleRepeat" }
+    override fun stop() { calls += "stop" }
 }
 
 class WidgetIntentsTest {

@@ -197,6 +197,16 @@ class PlaybackConnection(
         c.repeatMode = RepeatModeMapper.toPlayer(RepeatModeMapper.next(RepeatModeMapper.toApp(c.repeatMode)))
     }
 
+    override fun stop() {
+        val c = controller ?: return
+        c.stop()                                  // halt playback
+        c.clearMediaItems()                       // empty the timeline → currentMediaItem becomes null
+        currentQueue = emptyList()                // keep our URI list aligned with the controller
+        saveJob?.cancel()                         // cancel any debounced save the clear events would trigger
+        scope.launch { queueStore.clear() }       // forget the persisted session on disk
+        pushState()                               // emit the idle state now (don't wait for an event)
+    }
+
     /**
      * Run [action] now if the controller is connected, else stash it (one slot) and run it once
      * [connect] has wired the controller and restored the queue. [onApplied] fires right after the
