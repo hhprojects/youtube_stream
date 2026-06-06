@@ -3,7 +3,6 @@ package com.youtubestream.app.widget
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.Bitmap
-import android.view.View
 import android.widget.RemoteViews
 import com.youtubestream.app.R
 import com.youtubestream.app.playback.AppRepeatMode
@@ -35,12 +34,6 @@ object MediaWidgetRenderer {
         // --- Text ---
         views.setTextViewText(R.id.widget_title, model.title.ifBlank { "Nothing playing" })
         views.setTextViewText(R.id.widget_artist, model.artist)
-        if (model.upNextTitle != null) {
-            views.setTextViewText(R.id.widget_up_next, "Up next: ${model.upNextTitle}")
-            views.setViewVisibility(R.id.widget_up_next, View.VISIBLE)
-        } else {
-            views.setViewVisibility(R.id.widget_up_next, View.GONE)
-        }
 
         // --- Artwork (bitmap if loaded, else placeholder) ---
         if (artwork != null) {
