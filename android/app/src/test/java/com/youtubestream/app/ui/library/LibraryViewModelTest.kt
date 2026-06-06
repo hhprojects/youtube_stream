@@ -3,6 +3,8 @@ package com.youtubestream.app.ui.library
 import com.youtubestream.app.data.local.LibraryDao
 import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
+import com.youtubestream.app.data.remote.dto.ArtworkRequestDto
+import com.youtubestream.app.data.remote.dto.ArtworkResponseDto
 import com.youtubestream.app.data.remote.dto.DeleteResponseDto
 import com.youtubestream.app.data.remote.dto.DownloadRequestDto
 import com.youtubestream.app.data.remote.dto.SearchRequestDto
@@ -25,6 +27,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -40,6 +43,7 @@ class LibraryViewModelTest {
         override suspend fun exists(id: String) = songs.value.any { it.id == id }
         override suspend fun insert(song: LibrarySong) = songs.update { it + song }
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
+        override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
     }
 
     private class FakeController : PlaybackController {
@@ -59,14 +63,17 @@ class LibraryViewModelTest {
 
     private fun song(id: String) = LibrarySong(id, "T$id", "A$id", 0, "$id.m4a", "/songs/$id.m4a", 1L, 1L)
 
-    /** A Pi repo backed by a fake api; [onDelete] records/controls the DELETE call. */
-    private fun piRepo(onDelete: suspend (String) -> DeleteResponseDto = { error("unused") }) =
-        PiLibraryRepository(object : YoutubeStreamApi {
-            override suspend fun search(body: SearchRequestDto) = error("unused")
-            override suspend fun download(body: DownloadRequestDto) = error("unused")
-            override suspend fun library() = error("unused")
-            override suspend fun deleteFromPi(filename: String) = onDelete(filename)
-        })
+    /** A Pi repo backed by a fake api; [onDelete]/[onUpdateArtwork] record/control those calls. */
+    private fun piRepo(
+        onDelete: suspend (String) -> DeleteResponseDto = { error("unused") },
+        onUpdateArtwork: suspend (String, ArtworkRequestDto) -> ArtworkResponseDto = { _, _ -> error("unused") },
+    ) = PiLibraryRepository(object : YoutubeStreamApi {
+        override suspend fun search(body: SearchRequestDto) = error("unused")
+        override suspend fun download(body: DownloadRequestDto) = error("unused")
+        override suspend fun library() = error("unused")
+        override suspend fun deleteFromPi(filename: String) = onDelete(filename)
+        override suspend fun updateArtwork(filename: String, body: ArtworkRequestDto) = onUpdateArtwork(filename, body)
+    })
 
     @Test fun exposesLibraryAsContent() = runTest {
         val vm = LibraryViewModel(LibraryRepository(FakeDao(listOf(song("a"), song("b")))), piRepo(), FakeController())
@@ -117,5 +124,26 @@ class LibraryViewModelTest {
         runCurrent()
         assertEquals(listOf("a", "b"), dao.songs.value.map { it.id })  // local UNTOUCHED — Pi failed first
         assertEquals(1, errors.size)                                   // a user-facing error was emitted
+    }
+
+    @Test fun editArtworkRejectsNonYoutubeUrl() = runTest {
+        val dao = FakeDao(listOf(song("a")))
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), piRepo(), FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
+        vm.editArtwork(song("a"), "not a youtube link")
+        runCurrent()
+        assertEquals(1, errors.size)                          // user told it's not a link
+        assertNull(dao.songs.value.single().artworkUrl)       // nothing written
+    }
+
+    @Test fun editArtworkPersistsResolvedThumbnail() = runTest {
+        val dao = FakeDao(listOf(song("a")))
+        val pi = piRepo(onUpdateArtwork = { _, _ -> ArtworkResponseDto(true, "http://i/new.jpg") })
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        vm.editArtwork(song("a"), "https://youtu.be/dQw4w9WgXcQ")
+        runCurrent()
+        assertEquals("http://i/new.jpg", dao.songs.value.last().artworkUrl)   // Pi result saved to Room
     }
 }

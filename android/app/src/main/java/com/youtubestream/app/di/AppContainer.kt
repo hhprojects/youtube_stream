@@ -101,11 +101,7 @@ class AppContainer(context: Context) {
     val libraryRepository = LibraryRepository(db.libraryDao())
     val playHistoryRepository = PlayHistoryRepository(db.playEventDao())
     val piLibraryRepository = PiLibraryRepository(api)
-    val downloadRepository = DownloadRepository(
-        downloadApi, fileClient, db.libraryDao(), songsDir,
-        // Imported songs carry no thumbnail; best-effort search-by-title backfills one (30s `api`, not the POST client).
-        lookupArtwork = { song -> searchRepository.bestThumbnail("${song.artist} ${song.title}".trim()) },
-    ) { currentUrl }
+    val downloadRepository = DownloadRepository(downloadApi, fileClient, db.libraryDao(), songsDir) { currentUrl }
 
     // Bulk Pi imports run here (app-scoped), so they keep going if the user leaves the Import screen.
     val importDownloadManager = ImportDownloadManager(downloadRepository, appScope)

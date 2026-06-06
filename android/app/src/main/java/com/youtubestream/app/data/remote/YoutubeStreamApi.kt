@@ -1,5 +1,7 @@
 package com.youtubestream.app.data.remote
 
+import com.youtubestream.app.data.remote.dto.ArtworkRequestDto
+import com.youtubestream.app.data.remote.dto.ArtworkResponseDto
 import com.youtubestream.app.data.remote.dto.DeleteResponseDto
 import com.youtubestream.app.data.remote.dto.DownloadRequestDto
 import com.youtubestream.app.data.remote.dto.DownloadResponseDto
@@ -26,4 +28,11 @@ interface YoutubeStreamApi {
     /** Deletes the file from the Pi. Retrofit encodes the path segment; non-2xx → HttpException. */
     @DELETE("api/library/{filename}")
     suspend fun deleteFromPi(@Path("filename") filename: String): DeleteResponseDto
+
+    /** Sets the artwork (by videoId) for a Pi file; non-2xx → HttpException. */
+    @POST("api/library/{filename}/artwork")
+    suspend fun updateArtwork(
+        @Path("filename") filename: String,
+        @Body body: ArtworkRequestDto,
+    ): ArtworkResponseDto
 }

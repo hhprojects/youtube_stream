@@ -23,4 +23,12 @@ class LibraryRepository(
 
     /** Removes just the Room row by id — used when playback hits a missing local file (file already gone). */
     suspend fun deleteById(id: String) = dao.deleteById(id)
+
+    /** Updates one song's artwork by re-inserting it (REPLACE). Called after a successful Pi edit. */
+    suspend fun setArtwork(song: LibrarySong, artworkUrl: String?) {
+        dao.insert(song.copy(artworkUrl = artworkUrl))
+    }
+
+    /** Clears artwork on every row (the one-time "reset to placeholder" cleanup). */
+    suspend fun resetAllArtwork() = dao.clearAllArtwork()
 }

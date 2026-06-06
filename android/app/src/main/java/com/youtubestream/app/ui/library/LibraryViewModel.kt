@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
+import com.youtubestream.app.data.util.YouTubeUrl
 import com.youtubestream.app.playback.PlaybackController
 import com.youtubestream.app.ui.UiState
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +52,27 @@ class LibraryViewModel(
                 library.delete(song)
             } catch (e: Exception) {
                 _errors.tryEmit(e.message ?: "Couldn't delete from the Pi")
+            }
+        }
+    }
+
+    /**
+     * Swaps a song's artwork to the thumbnail of a pasted YouTube URL. Pi-first (like deleteEverywhere):
+     * persist on the Pi so it survives re-import + reaches other devices, then mirror into Room. A bad URL
+     * or a Pi failure surfaces as a one-shot error; the local row is left untouched.
+     */
+    fun editArtwork(song: LibrarySong, url: String) {
+        val videoId = YouTubeUrl.extractVideoId(url)
+        if (videoId == null) {
+            _errors.tryEmit("That doesn't look like a YouTube link.")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val thumbnail = pi.updateArtwork(song.filename, videoId)
+                library.setArtwork(song, thumbnail)
+            } catch (e: Exception) {
+                _errors.tryEmit(e.message ?: "Couldn't update artwork on the Pi")
             }
         }
     }

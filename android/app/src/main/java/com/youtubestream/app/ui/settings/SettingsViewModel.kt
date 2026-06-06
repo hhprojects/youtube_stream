@@ -2,6 +2,7 @@ package com.youtubestream.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsSource
@@ -23,6 +24,7 @@ sealed interface TestResult {
 class SettingsViewModel(
     private val settings: SettingsSource,
     private val piLibrary: PiLibraryRepository,
+    private val library: LibraryRepository,
 ) : ViewModel() {
 
     val serverUrl: StateFlow<String> = settings.serverUrl
@@ -42,6 +44,11 @@ class SettingsViewModel(
 
     fun reset() {
         viewModelScope.launch { settings.setServerUrl(DEFAULT_SERVER_URL) }
+    }
+
+    /** One-time cleanup: blanks artwork on every local row so old wrong guesses show the placeholder. */
+    fun resetArtwork() {
+        viewModelScope.launch { library.resetAllArtwork() }
     }
 
     fun testConnection() {
