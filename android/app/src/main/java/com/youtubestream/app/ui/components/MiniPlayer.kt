@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.youtubestream.app.playback.PlaybackController
@@ -78,7 +79,7 @@ fun MiniPlayer(
             val fraction = if (dur > 0) (state.positionMs.toFloat() / dur).coerceIn(0f, 1f) else 0f
             LinearProgressIndicator(
                 progress = { fraction },
-                modifier = Modifier.fillMaxWidth().height(2.dp),
+                modifier = Modifier.fillMaxWidth().height(2.dp).clearAndSetSemantics {},
                 trackColor = Color.Transparent,
                 drawStopIndicator = {},
             )
