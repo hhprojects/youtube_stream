@@ -19,6 +19,7 @@ data class PiSong(
     val filename: String,
     val downloadUrl: String,
     val size: Long,
+    val thumbnailUrl: String? = null,   // from the Pi sidecar; null when unknown
 )
 
 /** Progress of a two-step download (metadata POST, then file stream). */

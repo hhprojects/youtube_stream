@@ -2,6 +2,7 @@ package com.youtubestream.app.data.repository
 
 import com.youtubestream.app.data.model.PiSong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
+import com.youtubestream.app.data.remote.dto.ArtworkRequestDto
 import com.youtubestream.app.data.remote.dto.LibrarySongDto
 
 class PiLibraryRepository(private val api: YoutubeStreamApi) {
@@ -12,6 +13,13 @@ class PiLibraryRepository(private val api: YoutubeStreamApi) {
         val resp = api.deleteFromPi(filename)
         if (!resp.success) error("The Pi reported the delete failed")
     }
+
+    /** Sets the artwork by videoId on the Pi; returns the Pi-built thumbnail URL. Throws on failure. */
+    suspend fun updateArtwork(filename: String, videoId: String): String? {
+        val resp = api.updateArtwork(filename, ArtworkRequestDto(videoId))
+        if (!resp.success) error("The Pi reported the artwork update failed")
+        return resp.thumbnail
+    }
 }
 
 private fun LibrarySongDto.toDomain() = PiSong(
@@ -21,4 +29,5 @@ private fun LibrarySongDto.toDomain() = PiSong(
     filename = filename,
     downloadUrl = downloadUrl,
     size = size,
+    thumbnailUrl = thumbnail,
 )   // backend 'duration' ('Unknown') and dateAdded are dropped — not used by the Import screen
