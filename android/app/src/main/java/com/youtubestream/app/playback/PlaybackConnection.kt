@@ -11,13 +11,16 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -43,6 +46,13 @@ class PlaybackConnection(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     /** One-shot human-readable playback errors for the UI to surface (toast). */
     val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    // Guaranteed-delivery (buffered) — a recorded play must not be dropped, unlike best-effort errors.
+    private val _playStarts = Channel<String>(capacity = Channel.UNLIMITED)
+    /** Emits the songId (== LibrarySong.id) each time a track actually starts playing. */
+    val playStarts: Flow<String> = _playStarts.receiveAsFlow()
+
+    private val playStartGate = PlayStartGate()
 
     private var controller: MediaController? = null
 
@@ -83,6 +93,17 @@ class PlaybackConnection(
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             pushState()
+            // Record a real track-start into play-history (For You). The pure PlayStartGate decides
+            // when one play counts; gating on these two events avoids phantom (paused restore) and
+            // missed (async play / auto-advance) counts. trySend never drops on an UNLIMITED channel.
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+                playStartGate.onTransition(player.currentMediaItem?.mediaId, player.isPlaying)
+                    ?.let { _playStarts.trySend(it) }
+            }
+            if (events.contains(Player.EVENT_IS_PLAYING_CHANGED)) {
+                playStartGate.onPlayingChanged(player.isPlaying, player.currentMediaItem?.mediaId)
+                    ?.let { _playStarts.trySend(it) }
+            }
             // Persist when the queue, the current track, the play state, or the position jumps —
             // not on the smooth position tick (that fires no event). Debounced to one write.
             if (events.containsAny(

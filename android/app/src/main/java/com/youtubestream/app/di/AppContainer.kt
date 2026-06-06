@@ -14,6 +14,7 @@ import com.youtubestream.app.data.repository.DownloadRepository
 import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
+import com.youtubestream.app.data.repository.PlayHistoryRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsDataStore
@@ -98,6 +99,7 @@ class AppContainer(context: Context) {
 
     val searchRepository = SearchRepository(api)
     val libraryRepository = LibraryRepository(db.libraryDao())
+    val playHistoryRepository = PlayHistoryRepository(db.playEventDao())
     val piLibraryRepository = PiLibraryRepository(api)
     val downloadRepository = DownloadRepository(
         downloadApi, fileClient, db.libraryDao(), songsDir,
@@ -123,6 +125,11 @@ class AppContainer(context: Context) {
         // The Pi copy stays, so it reappears in Import for re-download.
         playbackConnection.errors
             .onEach { id -> libraryRepository.deleteById(id) }
+            .launchIn(playbackScope)
+
+        // Record every track-start to on-device play-history (powers the For You home, fully offline).
+        playbackConnection.playStarts
+            .onEach { id -> playHistoryRepository.record(id, System.currentTimeMillis()) }
             .launchIn(playbackScope)
 
         // One probe at startup so the banner/gating reflect the Pi before the user touches anything.
