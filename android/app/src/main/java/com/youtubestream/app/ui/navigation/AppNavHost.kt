@@ -42,7 +42,11 @@ private enum class Dest(val route: String, val label: String, val icon: ImageVec
 }
 
 @Composable
-fun AppNavHost(container: AppContainer) {
+fun AppNavHost(
+    container: AppContainer,
+    openPlayerSignal: Boolean = false,
+    onPlayerOpened: () -> Unit = {},
+) {
     val connection = container.playbackConnection
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
@@ -52,6 +56,18 @@ fun AppNavHost(container: AppContainer) {
     val context = LocalContext.current
     LaunchedEffect(connection) {
         connection.messages.collect { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
+    }
+
+    // Widget body-tap deep link: navigate to the Player once, then clear the signal.
+    LaunchedEffect(openPlayerSignal) {
+        if (openPlayerSignal) {
+            nav.navigate(Dest.Player.route) {
+                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            onPlayerOpened()
+        }
     }
 
     Scaffold(
