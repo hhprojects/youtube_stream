@@ -36,6 +36,7 @@ function pruneDownloads(dir = DOWNLOAD_DIR, maxBytes = DOWNLOADS_MAX_BYTES) {
       if (total <= maxBytes) break;
       try {
         fs.unlinkSync(f.path);
+        try { fs.unlinkSync(sidecarPathFor(dir, f.name)); } catch {}
         total -= f.size;
         removed.push(f.name);
         console.log(`[prune] removed ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`);
@@ -81,6 +82,29 @@ function parseArtistTitle(rawTitle) {
   return { artist: 'Unknown', title: rawTitle };
 }
 
+function thumbnailUrl(videoId) {
+  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
+}
+
+function sidecarPathFor(dir, audioFile) {
+  return path.join(dir, audioFile.replace(/\.(m4a|mp3)$/i, '.json'));
+}
+
+function readVideoId(dir, audioFile) {
+  try {
+    const p = sidecarPathFor(dir, audioFile);
+    if (!fs.existsSync(p)) return null;
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return typeof data.videoId === 'string' ? data.videoId : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeVideoId(dir, audioFile, videoId) {
+  fs.writeFileSync(sidecarPathFor(dir, audioFile), JSON.stringify({ videoId }));
+}
+
 app.post('/api/search', (req, res) => {
   const query = req.body?.query;
   if (!query || typeof query !== 'string') {
@@ -107,7 +131,7 @@ app.post('/api/search', (req, res) => {
             channel: data.channel || data.uploader || 'Unknown',
             duration: data.duration,
             url: `https://www.youtube.com/watch?v=${data.id}`,
-            thumbnail: data.thumbnail || `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`,
+            thumbnail: data.thumbnail || thumbnailUrl(data.id),
           };
         })
         .filter((item) => item.id && item.title);
@@ -139,6 +163,7 @@ app.post('/api/download', (req, res) => {
     }
     try {
       const stats = fs.statSync(outputPath);
+      writeVideoId(DOWNLOAD_DIR, `${safeTitle}.m4a`, videoId);
       const parsed = parseArtistTitle(title || safeTitle);
       res.json({
         success: true,
@@ -173,12 +198,33 @@ app.get('/api/library', (req, res) => {
           downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(file)}`,
           size: stats.size,
           dateAdded: stats.mtime,
+          thumbnail: thumbnailUrl(readVideoId(DOWNLOAD_DIR, file)),
         };
       })
       .sort((a, b) => b.dateAdded - a.dateAdded);
     res.json({ songs: files });
   } catch {
     res.status(500).json({ error: 'Failed to list library' });
+  }
+});
+
+app.post('/api/library/:filename/artwork', (req, res) => {
+  const filename = path.basename(req.params.filename).replace(/[^a-zA-Z0-9_.-]/g, '');
+  const { videoId } = req.body || {};
+  if (!filename || !(filename.endsWith('.m4a') || filename.endsWith('.mp3'))) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  if (!videoId || !YOUTUBE_ID_REGEX.test(String(videoId))) {
+    return res.status(400).json({ error: 'Valid video ID is required' });
+  }
+  if (!fs.existsSync(path.join(DOWNLOAD_DIR, filename))) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  try {
+    writeVideoId(DOWNLOAD_DIR, filename, videoId);
+    res.json({ success: true, thumbnail: thumbnailUrl(videoId) });
+  } catch {
+    res.status(500).json({ error: 'Failed to save artwork' });
   }
 });
 
@@ -194,6 +240,7 @@ app.delete('/api/library/:filename', (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
     fs.unlinkSync(filePath);
+    try { fs.unlinkSync(sidecarPathFor(DOWNLOAD_DIR, filename)); } catch {}
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Failed to delete file' });
@@ -209,4 +256,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads };
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId };
