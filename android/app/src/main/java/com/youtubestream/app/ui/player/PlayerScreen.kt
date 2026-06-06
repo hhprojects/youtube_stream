@@ -1,17 +1,21 @@
 package com.youtubestream.app.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -24,13 +28,14 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,9 +43,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.youtubestream.app.playback.AppRepeatMode
 import com.youtubestream.app.playback.PlaybackConnection
@@ -63,84 +73,97 @@ fun PlayerScreen(
     var expanded by remember { mutableStateOf(false) }
     val upNext = state.queue.drop(state.currentIndex + 1)
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Artwork(
-                state.artworkUri,
-                Modifier.fillMaxWidth().aspectRatio(1f),
-            )
-        }
-        item {
-            Text(
-                state.title.ifBlank { "Unknown" },
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                state.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        item { Scrubber(state) { ms -> connection.seekTo(ms) } }
-        item { Controls(state, connection) }
-        item {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Up next (${upNext.size})",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { expanded = !expanded }) {
-                    if (expanded) Icon(Icons.Filled.ExpandLess, contentDescription = "Collapse")
-                    else Icon(Icons.Filled.ExpandMore, contentDescription = "Expand")
-                }
-            }
-        }
-        if (expanded) {
-            items(upNext, key = { it.mediaId }) { item -> UpNextRow(item) }
+    Box(modifier.fillMaxSize()) {
+        // Immersive backdrop: the current art, blown up + blurred, tinted by a scrim for legibility.
+        ArtBackdrop(state.artworkUri)
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item { Spacer(Modifier.height(8.dp)) }
+            item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
+            item { TrackInfo(state.title, state.artist) }
+            item { Scrubber(state) { ms -> connection.seekTo(ms) } }
+            item { Controls(state, connection) }
+            item { UpNextHeader(upNext.size, expanded) { expanded = !expanded } }
+            if (expanded) items(upNext, key = { it.mediaId }) { item -> UpNextRow(item) }
         }
     }
 }
 
+/** Full-bleed album art, scaled up and blurred, with a surface scrim so foreground text stays legible. */
 @Composable
-private fun EmptyPlayer(modifier: Modifier, onBrowseLibrary: () -> Unit) {
-    Column(
-        modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("Nothing playing")
-        Text(
-            "Pick a song from your Library to start playing.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(onClick = onBrowseLibrary) { Text("Go to Library") }
-    }
-}
-
-@Composable
-private fun Artwork(uri: String?, modifier: Modifier = Modifier) {
-    Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+private fun ArtBackdrop(uri: String?) {
+    Box(Modifier.fillMaxSize()) {
         if (uri != null) {
-            AsyncImage(model = uri, contentDescription = null, modifier = Modifier.fillMaxSize())
-        } else {
+            AsyncImage(
+                model = uri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().blur(64.dp),
+            )
+        }
+        // Lighter at the top (let the art show), heavier toward the bottom where the controls sit.
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                    ),
+                ),
+            ),
+        )
+    }
+}
+
+/** Large rounded album art with a music-note fallback (square-cropped so 16:9 thumbnails don't letterbox). */
+@Composable
+private fun HeroArtwork(uri: String?, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shadowElevation = 12.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            // Fallback note sits *behind* the image, so a still-loading or failed fetch isn't a blank box.
             Icon(
                 Icons.Filled.MusicNote,
                 contentDescription = null,
                 modifier = Modifier.size(96.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (uri != null) {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun TrackInfo(title: String, artist: String) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(
+            title.ifBlank { "Unknown" },
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.fillMaxWidth().basicMarquee(),
+        )
+        Text(
+            artist,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -161,10 +184,10 @@ private fun Scrubber(state: PlayerUiState, onSeek: (Long) -> Unit) {
             },
         )
         Row(Modifier.fillMaxWidth()) {
-            Text(formatTime(state.positionMs), style = MaterialTheme.typography.labelSmall)
+            Text(formatTime(state.positionMs), style = MaterialTheme.typography.labelMedium)
             Text(
                 formatTime(state.durationMs),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
             )
@@ -177,7 +200,7 @@ private fun Controls(state: PlayerUiState, connection: PlaybackConnection) {
     val active = MaterialTheme.colorScheme.primary
     val idle = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -185,14 +208,15 @@ private fun Controls(state: PlayerUiState, connection: PlaybackConnection) {
             Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = if (state.shuffleEnabled) active else idle)
         }
         IconButton(onClick = { connection.previous() }) {
-            Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous")
+            Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp))
         }
-        IconButton(onClick = { connection.togglePlayPause() }) {
-            if (state.isPlaying) Icon(Icons.Filled.Pause, contentDescription = "Pause", modifier = Modifier.size(48.dp))
-            else Icon(Icons.Filled.PlayArrow, contentDescription = "Play", modifier = Modifier.size(48.dp))
+        // The hero control: a large filled button that picks up the expressive theme's shape + spring motion.
+        FilledIconButton(onClick = { connection.togglePlayPause() }, modifier = Modifier.size(72.dp)) {
+            if (state.isPlaying) Icon(Icons.Filled.Pause, contentDescription = "Pause", modifier = Modifier.size(36.dp))
+            else Icon(Icons.Filled.PlayArrow, contentDescription = "Play", modifier = Modifier.size(36.dp))
         }
         IconButton(onClick = { connection.next() }) {
-            Icon(Icons.Filled.SkipNext, contentDescription = "Next")
+            Icon(Icons.Filled.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
         }
         IconButton(onClick = { connection.cycleRepeat() }) {
             when (state.repeatMode) {
@@ -205,9 +229,52 @@ private fun Controls(state: PlayerUiState, connection: PlaybackConnection) {
 }
 
 @Composable
+private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Up next ($count)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        IconButton(onClick = onToggle) {
+            if (expanded) Icon(Icons.Filled.ExpandLess, contentDescription = "Collapse")
+            else Icon(Icons.Filled.ExpandMore, contentDescription = "Expand")
+        }
+    }
+}
+
+@Composable
 private fun UpNextRow(item: QueueItem) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(item.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun EmptyPlayer(modifier: Modifier, onBrowseLibrary: () -> Unit) {
+    Column(
+        modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.size(96.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text("Nothing playing", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Pick a song from your Library to start playing.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Button(onClick = onBrowseLibrary) { Text("Go to Library") }
     }
 }
