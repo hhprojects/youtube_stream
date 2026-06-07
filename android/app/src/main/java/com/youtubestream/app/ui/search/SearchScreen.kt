@@ -13,10 +13,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +40,7 @@ import com.youtubestream.app.data.network.allowsPiActions
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.ServerStatusBanner
+import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
 fun SearchScreen(modifier: Modifier = Modifier) {
@@ -48,6 +51,7 @@ fun SearchScreen(modifier: Modifier = Modifier) {
     val status by vm.status.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.onEnter() }
     var query by remember { mutableStateOf("") }
+    var addingTo by remember { mutableStateOf<String?>(null) }   // library song id pending an add-to-playlist
     val focusManager = LocalFocusManager.current
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -91,12 +95,17 @@ fun SearchScreen(modifier: Modifier = Modifier) {
                                 download = downloads[result.id],
                                 canDownload = status.allowsPiActions,
                                 onDownload = { vm.download(result) },
+                                onAddToPlaylist = { addingTo = result.id },
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    addingTo?.let { id ->
+        AddToPlaylistSheet(songId = id, onDismiss = { addingTo = null })
     }
 }
 
@@ -107,6 +116,7 @@ private fun ResultRow(
     download: ItemDownload?,
     canDownload: Boolean,
     onDownload: () -> Unit,
+    onAddToPlaylist: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AsyncImage(
@@ -119,7 +129,14 @@ private fun ResultRow(
             Text(result.channel, maxLines = 1)
         }
         when {
-            downloaded -> Icon(Icons.Filled.CheckCircle, contentDescription = "Downloaded")
+            // Add-to-playlist is offered ONLY for already-downloaded results: a downloaded id is a real
+            // library_songs.id, so the membership joins. A not-yet-downloaded id would be an invisible orphan.
+            downloaded -> Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onAddToPlaylist) {
+                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
+                }
+                Icon(Icons.Filled.CheckCircle, contentDescription = "Downloaded")
+            }
             download is ItemDownload.Downloading -> CircularProgressIndicator(
                 progress = { download.fraction },
                 modifier = Modifier.size(28.dp),

@@ -1,5 +1,6 @@
 package com.youtubestream.app.ui.playlist
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,11 +9,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RemoveCircleOutline
@@ -32,18 +36,27 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.youtubestream.app.playlist.PlaylistReorder
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.PlaylistCover
 import com.youtubestream.app.ui.components.SongRow
+import kotlin.math.roundToInt
 
 @Composable
 fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -57,6 +70,26 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
     LaunchedEffect(closed) { if (closed) onBack() }
 
     val content = state as? UiState.Content
+
+    // --- Drag-to-reorder state ---------------------------------------------------------------
+    // `working` is the order the list renders. It's seeded from the DB list and re-seeded whenever
+    // that list changes (remember(songs)). On drop we set `working` locally AND persist; when Room
+    // re-emits the same order its key is equal, so `working` is kept — no flash back to the old order
+    // in the gap before the DB round-trips. `displayed` is the live drag preview, produced by the
+    // SAME pure fn that persists the order, so what you see is exactly what gets saved.
+    val songs = content?.data?.songs.orEmpty()
+    var working by remember(songs) { mutableStateOf(songs) }
+    var draggedId by remember { mutableStateOf<String?>(null) }
+    var dragFrom by remember { mutableIntStateOf(0) }
+    var dragTo by remember { mutableIntStateOf(0) }
+    var dragAccumPx by remember { mutableFloatStateOf(0f) }
+    var rowHeightPx by remember { mutableIntStateOf(0) }
+    val lazyState = rememberLazyListState()
+    val spacingPx = with(LocalDensity.current) { 8.dp.roundToPx() }
+    val displayed =
+        if (draggedId == null) working
+        else PlaylistReorder.reorder(working.map { it.id }, dragFrom, dragTo)
+            .mapNotNull { id -> working.firstOrNull { it.id == id } }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -92,19 +125,19 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                 is UiState.Idle, is UiState.Loading -> CircularProgressIndicator()
                 is UiState.Error -> Text("Error: ${s.message}")
                 is UiState.Content -> {
-                    val songs = s.data.songs
                     LazyColumn(
-                        Modifier.fillMaxSize(),
+                        state = lazyState,
+                        modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         item {
                             Header(
                                 data = s.data,
-                                onPlay = { vm.play(songs, 0) },
-                                onShuffle = { vm.shuffle(songs) },
+                                onPlay = { vm.play(displayed, 0) },
+                                onShuffle = { vm.shuffle(displayed) },
                             )
                         }
-                        if (songs.isEmpty()) {
+                        if (displayed.isEmpty()) {
                             item {
                                 Text(
                                     "No songs yet. Add songs from \"All songs\".",
@@ -114,18 +147,75 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                                 )
                             }
                         } else {
-                            itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                            itemsIndexed(displayed, key = { _, song -> song.id }) { index, song ->
+                                val isDragged = song.id == draggedId
+                                // The dragged row follows the finger via translationY; the OTHERS reflow
+                                // with animateItem(). Never both on one row — they'd fight and jitter.
+                                val rowModifier =
+                                    if (isDragged) {
+                                        Modifier
+                                            .zIndex(1f)
+                                            .graphicsLayer {
+                                                translationY =
+                                                    (dragFrom - dragTo) * (rowHeightPx + spacingPx).toFloat() + dragAccumPx
+                                                scaleX = 1.03f
+                                                scaleY = 1.03f
+                                            }
+                                    } else {
+                                        Modifier.animateItem()
+                                    }
                                 SongRow(
                                     title = song.title,
                                     artist = song.artist,
                                     artworkUrl = song.artworkUrl,
-                                    onClick = { vm.play(songs, index) },
+                                    onClick = { vm.play(displayed, index) },
+                                    modifier = rowModifier.onSizeChanged { if (it.height > 0) rowHeightPx = it.height },
                                     trailing = {
                                         IconButton(onClick = { vm.removeSong(song.id) }) {
                                             Icon(
                                                 Icons.Filled.RemoveCircleOutline,
                                                 contentDescription = "Remove from playlist",
                                             )
+                                        }
+                                        // Long-press the handle (not the whole row, which taps to play) to drag.
+                                        Box(
+                                            Modifier
+                                                .size(40.dp)
+                                                .pointerInput(song.id) {
+                                                    detectDragGesturesAfterLongPress(
+                                                        onDragStart = {
+                                                            draggedId = song.id
+                                                            dragFrom = working.indexOfFirst { it.id == song.id }
+                                                            dragTo = dragFrom
+                                                            dragAccumPx = 0f
+                                                        },
+                                                        onDrag = { change, amount ->
+                                                            change.consume()
+                                                            dragAccumPx += amount.y
+                                                            // Stride = row height + the 8dp spacedBy gap, or the
+                                                            // threshold drifts ~8dp/row over a long list.
+                                                            val stride = rowHeightPx + spacingPx
+                                                            if (stride > 0) {
+                                                                dragTo = (dragFrom + (dragAccumPx / stride).roundToInt())
+                                                                    .coerceIn(0, working.lastIndex)
+                                                            }
+                                                        },
+                                                        onDragEnd = {
+                                                            val finalIds = PlaylistReorder.reorder(
+                                                                working.map { it.id }, dragFrom, dragTo,
+                                                            )
+                                                            working = finalIds.mapNotNull { id ->
+                                                                working.firstOrNull { it.id == id }
+                                                            }
+                                                            vm.reorder(finalIds)
+                                                            draggedId = null
+                                                        },
+                                                        onDragCancel = { draggedId = null },
+                                                    )
+                                                },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(Icons.Filled.DragHandle, contentDescription = "Reorder")
                                         }
                                     },
                                 )
