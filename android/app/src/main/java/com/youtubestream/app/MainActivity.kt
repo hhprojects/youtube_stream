@@ -1,6 +1,8 @@
 package com.youtubestream.app
 
 import android.Manifest
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -62,5 +64,31 @@ class MainActivity : ComponentActivity() {
             setIntent(intent)
         }
         return open
+    }
+
+    companion object {
+        private const val RC_OPEN_PLAYER = 200
+
+        /**
+         * PendingIntent that launches the app and asks the UI to expand the Player sheet.
+         * One definition shared by the home-screen widget body and the Media3 media
+         * notification, so the "open the Player" contract lives in exactly one place.
+         */
+        fun openPlayerPendingIntent(context: Context): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java)
+                .setAction(Intent.ACTION_MAIN)
+                .putExtra(WidgetIntents.EXTRA_OPEN_PLAYER, true)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
+            return PendingIntent.getActivity(
+                context,
+                RC_OPEN_PLAYER,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
     }
 }

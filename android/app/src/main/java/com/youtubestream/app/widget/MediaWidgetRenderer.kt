@@ -68,7 +68,10 @@ object MediaWidgetRenderer {
         }
 
         // --- Clicks ---
-        views.setOnClickPendingIntent(R.id.widget_body, clicks.body)
+        // Whole-widget tap opens the Player. The five transport buttons below register their own
+        // click intents, so they intercept their taps; every other surface (artwork, text, padding)
+        // is non-clickable and falls through to widget_root → opens the Player.
+        views.setOnClickPendingIntent(R.id.widget_root, clicks.body)
         views.setOnClickPendingIntent(R.id.widget_previous, clicks.previous)
         views.setOnClickPendingIntent(R.id.widget_play_pause, clicks.toggle)
         views.setOnClickPendingIntent(R.id.widget_next, clicks.next)

@@ -23,7 +23,6 @@ object WidgetIntents {
     private const val RC_NEXT = 102
     private const val RC_SHUFFLE = 103
     private const val RC_REPEAT = 104
-    private const val RC_BODY = 105
 
     fun clickIntents(context: Context) = WidgetClickIntents(
         toggle = command(context, ACTION_TOGGLE, RC_TOGGLE),
@@ -31,24 +30,12 @@ object WidgetIntents {
         next = command(context, ACTION_NEXT, RC_NEXT),
         shuffle = command(context, ACTION_SHUFFLE, RC_SHUFFLE),
         repeat = command(context, ACTION_REPEAT, RC_REPEAT),
-        body = openPlayer(context),
+        body = MainActivity.openPlayerPendingIntent(context),
     )
 
     private fun command(context: Context, action: String, requestCode: Int): PendingIntent {
         val intent = Intent(context, MediaWidgetProvider::class.java).setAction(action)
         return PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_IMMUTABLE)
-    }
-
-    private fun openPlayer(context: Context): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java)
-            .setAction(Intent.ACTION_MAIN)
-            .putExtra(EXTRA_OPEN_PLAYER, true)
-            .addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
-            )
-        return PendingIntent.getActivity(context, RC_BODY, intent, PendingIntent.FLAG_IMMUTABLE)
     }
 }
 
