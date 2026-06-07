@@ -34,6 +34,10 @@ interface PlaylistDao {
         deletePlaylistRow(id)
     }
 
+    /** A single playlist's metadata (name/cover) for the detail header. Null after it's deleted. */
+    @Query("SELECT * FROM playlists WHERE id = :id")
+    fun observePlaylist(id: Long): Flow<Playlist?>
+
     // ---- landing summaries (count + first-song art via JOIN so orphans are invisible) ----
 
     @Query(

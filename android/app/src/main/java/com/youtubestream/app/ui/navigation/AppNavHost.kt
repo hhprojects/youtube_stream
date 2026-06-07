@@ -46,9 +46,11 @@ import com.youtubestream.app.di.AppContainer
 import com.youtubestream.app.ui.discover.MoodDetailScreen
 import com.youtubestream.app.ui.home.HomeScreen
 import com.youtubestream.app.ui.imports.ImportScreen
+import com.youtubestream.app.ui.library.LibraryHomeScreen
 import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
+import com.youtubestream.app.ui.playlist.PlaylistDetailScreen
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -157,7 +159,24 @@ fun AppNavHost(
                 composable(Dest.Search.route) { SearchScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Library.route) {
-                    LibraryScreen(modifier = Modifier.fillMaxSize())
+                    LibraryHomeScreen(
+                        onOpenAllSongs = { nav.navigate("allSongs") },
+                        onOpenPlaylist = { id -> nav.navigate("playlist/$id") },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                composable("allSongs") {
+                    LibraryScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize())
+                }
+                composable(
+                    "playlist/{id}",
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    PlaylistDetailScreen(
+                        playlistId = entry.arguments?.getLong("id") ?: 0L,
+                        onBack = { nav.popBackStack() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
                 composable("import") { ImportScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
                 composable(
