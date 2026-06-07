@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.local.PlayEvent
 import com.youtubestream.app.data.model.DiscoverySong
+import com.youtubestream.app.data.model.GenreChart
 import com.youtubestream.app.data.model.MoodCategory
 import com.youtubestream.app.data.model.MoodDetail
 import com.youtubestream.app.data.network.ReachabilitySource
@@ -34,12 +35,13 @@ class DiscoverViewModelTest {
         val onTrending: suspend (String) -> List<DiscoverySong> = { listOf(DiscoverySong("t1", "T", "A", null)) },
         val onRelated: suspend (String) -> List<DiscoverySong> = { listOf(DiscoverySong("r1", "T", "A", null)) },
         val onMoods: suspend () -> List<MoodCategory> = { listOf(MoodCategory("k", "Chill", "Moods")) },
+        val onGenreCharts: suspend (String) -> List<GenreChart> = { listOf(GenreChart("PL1", "Pop")) },
     ) : DiscoverySource {
         override suspend fun trending(region: String) = onTrending(region)
         override suspend fun related(seedVideoId: String) = onRelated(seedVideoId)
         override suspend fun moods() = onMoods()
         override suspend fun moodSongs(key: String) = MoodDetail("", emptyList())
-        override suspend fun genreCharts(region: String) = emptyList<com.youtubestream.app.data.model.GenreChart>()
+        override suspend fun genreCharts(region: String) = onGenreCharts(region)
         override suspend fun playlistSongs(playlistId: String) = MoodDetail("", emptyList())
     }
 
@@ -103,6 +105,27 @@ class DiscoverViewModelTest {
             var item = awaitItem()
             while (item is DiscoverUiState.Loading) item = awaitItem()
             assertTrue(item is DiscoverUiState.Hidden)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test fun reachableLoadsGenreCharts() = runTest {
+        vm().state.test {
+            var item = awaitItem()
+            while (item is DiscoverUiState.Loading) item = awaitItem()
+            assertNotNull((item as DiscoverUiState.Content).content.genreCharts)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test fun genreChartsDegradeIndependently() = runTest {
+        val source = FakeSource(onGenreCharts = { throw RuntimeException("genres broke") })
+        vm(source = source).state.test {
+            var item = awaitItem()
+            while (item is DiscoverUiState.Loading) item = awaitItem()
+            val c = (item as DiscoverUiState.Content).content
+            assertNull(c.genreCharts)        // degraded
+            assertNotNull(c.trending)        // others survive
             cancelAndIgnoreRemainingEvents()
         }
     }

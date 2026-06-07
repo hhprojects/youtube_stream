@@ -64,6 +64,7 @@ class DiscoverViewModel(
         val trendingD = async { runCatching { source.trending(region()) }.getOrNull() }
         val relatedD = async { seedId?.let { runCatching { source.related(it) }.getOrNull() } }
         val moodsD = async { runCatching { source.moods() }.getOrNull() }
+        val genreChartsD = async { runCatching { source.genreCharts("US") }.getOrNull() }
 
         val trending = trendingD.await()?.takeIf { it.isNotEmpty() }
             ?.let { DiscoverShelf("trending", "Trending now", it) }
@@ -73,7 +74,8 @@ class DiscoverViewModel(
                 DiscoverShelf("related", title, it)
             }
         val moods = moodsD.await()?.takeIf { it.isNotEmpty() }
-        DiscoverContent(trending = trending, related = related, moods = moods)
+        val genreCharts = genreChartsD.await()?.takeIf { it.isNotEmpty() }
+        DiscoverContent(trending = trending, related = related, moods = moods, genreCharts = genreCharts)
     }
 
     fun onSongClick(song: DiscoverySong) =

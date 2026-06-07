@@ -1,6 +1,7 @@
 package com.youtubestream.app.ui.discover
 
 import com.youtubestream.app.data.model.DiscoverySong
+import com.youtubestream.app.data.model.GenreChart
 import com.youtubestream.app.data.model.MoodCategory
 import com.youtubestream.app.data.network.ServerStatus
 
@@ -15,6 +16,7 @@ data class DiscoverContent(
     val trending: DiscoverShelf?,
     val related: DiscoverShelf?,
     val moods: List<MoodCategory>?,
+    val genreCharts: List<GenreChart>?,
 )
 
 sealed interface DiscoverUiState {
