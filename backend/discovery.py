@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Thin CLI over ytmusicapi (unauthenticated). Prints one JSON object to stdout.
-Usage: python3 discovery.py <trending REGION | related VIDEO_ID | moods | mood PARAMS>
+Usage: python3 discovery.py <trending REGION | related VIDEO_ID | moods | mood PARAMS | genrecharts REGION | playlist PLAYLIST_ID>
 On failure: prints {"error": "..."} to stderr and exits non-zero."""
 import sys
 import json
@@ -71,6 +71,20 @@ def cmd_mood(yt, params):
     return {"title": title, "songs": _songs_from(pl.get("tracks") or [])}
 
 
+def cmd_genrecharts(yt, region):
+    # genres section is US-only; ranked genre chart playlists, each resolved on tap via cmd_playlist.
+    charts = yt.get_charts(country=region)
+    genres = charts.get("genres") or []
+    out = [{"key": g.get("playlistId"), "title": g.get("title")}
+           for g in genres if g.get("playlistId") and g.get("title")]
+    return {"charts": out}
+
+
+def cmd_playlist(yt, playlist_id):
+    pl = yt.get_playlist(playlist_id, limit=50)
+    return {"title": pl.get("title") or "", "songs": _songs_from(pl.get("tracks") or [])}
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "missing command"}), file=sys.stderr)
@@ -87,6 +101,11 @@ def main():
             out = cmd_moods(yt)
         elif cmd == "mood":
             out = cmd_mood(yt, sys.argv[2])
+        elif cmd == "genrecharts":
+            region = sys.argv[2] if len(sys.argv) > 2 else "US"
+            out = cmd_genrecharts(yt, region)
+        elif cmd == "playlist":
+            out = cmd_playlist(yt, sys.argv[2])
         else:
             print(json.dumps({"error": f"unknown command {cmd}"}), file=sys.stderr)
             sys.exit(2)
