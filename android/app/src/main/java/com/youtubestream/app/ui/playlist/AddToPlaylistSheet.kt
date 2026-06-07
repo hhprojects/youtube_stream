@@ -28,18 +28,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.PlaylistCover
 
 /**
- * Bottom-sheet picker: add [song] to an existing playlist or create a new one. Self-contained
- * (owns its ViewModel) so any screen can show it with just a song — Slice 3 wires it into
- * Search and Now-Playing too. Adding a duplicate is a silent no-op (DAO IGNORE).
+ * Bottom-sheet picker: add the song with id [songId] to an existing playlist or create a new one.
+ * Takes just the id (not a full LibrarySong) because that's all it needs — which is what lets the
+ * same sheet be opened from Library, Search, and Now-Playing. Callers must pass a *library* song id
+ * (`library_songs.id`): a non-library id would create an invisible orphan membership (no JOIN match).
+ * Adding a duplicate is a silent no-op (DAO IGNORE).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddToPlaylistSheet(song: LibrarySong, onDismiss: () -> Unit) {
+fun AddToPlaylistSheet(songId: String, onDismiss: () -> Unit) {
     val vm = appViewModel { AddToPlaylistViewModel(it.playlistRepository) }
     val summaries by vm.summaries.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
@@ -65,7 +66,7 @@ fun AddToPlaylistSheet(song: LibrarySong, onDismiss: () -> Unit) {
                     title = playlist.name,
                     subtitle = "${playlist.songCount} songs",
                 ) {
-                    vm.add(playlist.id, song.id)
+                    vm.add(playlist.id, songId)
                     onDismiss()
                 }
             }
@@ -89,7 +90,7 @@ fun AddToPlaylistSheet(song: LibrarySong, onDismiss: () -> Unit) {
             confirmButton = {
                 TextButton(
                     enabled = name.isNotBlank(),
-                    onClick = { vm.createAndAdd(name, song.id); creating = false; onDismiss() },
+                    onClick = { vm.createAndAdd(name, songId); creating = false; onDismiss() },
                 ) { Text("Create & add") }
             },
             dismissButton = {
