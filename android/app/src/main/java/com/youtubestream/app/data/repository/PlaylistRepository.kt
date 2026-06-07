@@ -15,6 +15,8 @@ class PlaylistRepository(private val dao: PlaylistDao) {
 
     fun observeSummaries(): Flow<List<PlaylistSummary>> = dao.observeSummaries()
 
+    fun observePlaylist(id: Long): Flow<Playlist?> = dao.observePlaylist(id)
+
     fun observeSongs(playlistId: Long): Flow<List<LibrarySong>> = dao.observeSongs(playlistId)
 
     suspend fun create(name: String, now: Long): Long =
