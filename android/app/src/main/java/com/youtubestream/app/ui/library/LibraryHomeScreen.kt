@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,15 +43,17 @@ import com.youtubestream.app.data.local.PlaylistSummary
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.PlaylistCover
+import com.youtubestream.app.ui.playlist.SmartKind
 
 /**
- * Playlists-first Library landing. The existing flat all-songs list is now reached through the
- * pinned "All songs" row; tapping a playlist opens its detail page. Smart playlists arrive in a
- * later slice (they'd be pinned here next to "All songs").
+ * Playlists-first Library landing. The flat all-songs list is reached through the pinned "All songs"
+ * row; the two smart playlists ("Recently played", "Most played") are pinned below it; tapping a
+ * playlist opens its detail page.
  */
 @Composable
 fun LibraryHomeScreen(
     onOpenAllSongs: () -> Unit,
+    onOpenSmart: (String) -> Unit,
     onOpenPlaylist: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -72,6 +76,22 @@ fun LibraryHomeScreen(
                         title = "All songs",
                         subtitle = "${s.data.allSongsCount} songs",
                         onClick = onOpenAllSongs,
+                    )
+                }
+                item {
+                    PinnedRow(
+                        icon = Icons.Filled.History,
+                        title = SmartKind.RECENTLY_PLAYED.title,
+                        subtitle = "Your recent plays",
+                        onClick = { onOpenSmart(SmartKind.RECENTLY_PLAYED.key) },
+                    )
+                }
+                item {
+                    PinnedRow(
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        title = SmartKind.MOST_PLAYED.title,
+                        subtitle = "Your most played",
+                        onClick = { onOpenSmart(SmartKind.MOST_PLAYED.key) },
                     )
                 }
                 item {

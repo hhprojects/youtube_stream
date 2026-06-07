@@ -1,10 +1,12 @@
 package com.youtubestream.app.data.repository
 
+import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.local.PlayEvent
 import com.youtubestream.app.data.local.PlayEventDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -16,6 +18,9 @@ class PlayHistoryRepositoryTest {
         val events = MutableStateFlow(initial)
         override suspend fun insert(event: PlayEvent) = events.update { it + event }
         override fun observeAll(): Flow<List<PlayEvent>> = events
+        // Smart-playlist queries are SQL (JOIN to library_songs) — not exercised here; stubbed empty.
+        override fun observeRecentlyPlayed(limit: Int): Flow<List<LibrarySong>> = flowOf(emptyList())
+        override fun observeMostPlayed(limit: Int): Flow<List<LibrarySong>> = flowOf(emptyList())
     }
 
     @Test

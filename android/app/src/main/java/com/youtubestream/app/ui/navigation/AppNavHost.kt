@@ -166,6 +166,7 @@ fun AppNavHost(
                 composable(Dest.Library.route) {
                     LibraryHomeScreen(
                         onOpenAllSongs = { nav.navigate("allSongs") },
+                        onOpenSmart = { key -> nav.navigate("smart/$key") },
                         onOpenPlaylist = { id -> nav.navigate("playlist/$id") },
                         modifier = Modifier.fillMaxSize(),
                     )
