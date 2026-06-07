@@ -10,4 +10,9 @@
     <color name="widget_background">#FF202124</color>
     <color name="widget_title">#FFFFFFFF</color>
     <color name="widget_subtitle">#FFBDBDBD</color>
+
+    <!-- Window background painted by the OS before Compose's first frame (and behind any
+         non-opaque surface). Kept in sync with Compose's `backgroundLight` (#FAFDFB) so the
+         cold-start frame matches the app. The dark counterpart lives in values-night/. -->
+    <color name="window_background">#FFFAFDFB</color>
 </resources>

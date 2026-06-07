@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode override. The `-night` resource qualifier makes the OS pick this file whenever
+         the system is in dark mode (UI_MODE_NIGHT_YES), the same signal Compose's
+         isSystemInDarkTheme() reads. Matches Compose's `backgroundDark` (#101413) so the
+         cold-start frame is dark instead of a white flash. -->
+    <color name="window_background">#FF101413</color>
+</resources>
