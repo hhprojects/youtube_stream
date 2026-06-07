@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createCache } = require('./cache');
-const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape, getGenreCharts, getPlaylist } = require('./discovery');
+const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape, getGenreCharts, getPlaylist, getPodcastSearch, getPodcast, validatePodcastShape } = require('./discovery');
 
 const FIX = path.join(__dirname, 'test', 'fixtures', 'discovery');
 const raw = (name) => fs.readFileSync(path.join(FIX, name), 'utf8');
@@ -97,4 +97,28 @@ test('validateDiscoveryShape: flags genrecharts/playlist drift', () => {
   assert.ok(validateDiscoveryShape('genrecharts', {}).length > 0);
   assert.ok(validateDiscoveryShape('genrecharts', { charts: [{ title: 'Pop' }] }).length > 0); // missing key
   assert.ok(validateDiscoveryShape('playlist', { songs: [] }).length > 0);                      // empty playlist
+});
+
+// --- podcasts ---
+
+test('getPodcastSearch / getPodcast cache + key independently', async () => {
+  const cache = createCache({ ttlMs: 10_000, now: () => 0 });
+  const seen = [];
+  const run = async (cmd, arg) => { seen.push([cmd, arg]); return { ok: true }; };
+  await getPodcastSearch(run, cache, 'ai podcast');
+  await getPodcast(run, cache, 'MPSPxyz');
+  await getPodcastSearch(run, cache, 'ai podcast');   // cached, no new call
+  assert.deepEqual(seen, [['podcast_search', 'ai podcast'], ['podcast', 'MPSPxyz']]);
+});
+
+test('validatePodcastShape: valid payloads return no problems', () => {
+  assert.deepEqual(validatePodcastShape('podcast_search', { shows: [{ showId: 'MPSPxyz', title: 'A Show' }] }), []);
+  assert.deepEqual(validatePodcastShape('podcast', { title: 'Show', episodes: [{ videoId: 'abc123', title: 'Ep 1' }] }), []);
+});
+
+test('validatePodcastShape: flags drift (empty, missing fields)', () => {
+  assert.ok(validatePodcastShape('podcast_search', { shows: [] }).length > 0);                 // empty
+  assert.ok(validatePodcastShape('podcast_search', { shows: [{ title: 'X' }] }).length > 0);   // missing showId
+  assert.ok(validatePodcastShape('podcast', { title: 'Show', episodes: [] }).length > 0);      // no episodes
+  assert.ok(validatePodcastShape('podcast', { title: 'S', episodes: [{ title: 'no id' }] }).length > 0); // missing videoId
 });

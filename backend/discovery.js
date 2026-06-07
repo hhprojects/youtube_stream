@@ -35,6 +35,8 @@ const getMoods = (run, cache) => cached(cache, 'moods', () => run('moods'));
 const getMood = (run, cache, params) => cached(cache, `mood:${params}`, () => run('mood', params));
 const getGenreCharts = (run, cache, region) => cached(cache, `genrecharts:${region}`, () => run('genrecharts', region));
 const getPlaylist = (run, cache, playlistId) => cached(cache, `playlist:${playlistId}`, () => run('playlist', playlistId));
+const getPodcastSearch = (run, cache, query) => cached(cache, `podcast_search:${query}`, () => run('podcast_search', query));
+const getPodcast = (run, cache, showId) => cached(cache, `podcast:${showId}`, () => run('podcast', showId));
 
 /**
  * Shape guard for discovery payloads. Returns a list of problem strings (empty = OK).
@@ -80,4 +82,33 @@ function validateDiscoveryShape(kind, data) {
   return problems;
 }
 
-module.exports = { parseDiscoveryOutput, makeRunner, getTrending, getRelated, getMoods, getMood, getGenreCharts, getPlaylist, validateDiscoveryShape };
+/** Shape guard for podcast payloads (mirrors validateDiscoveryShape). Empty list = OK. */
+function validatePodcastShape(kind, data) {
+  const problems = [];
+  const isStr = (v) => typeof v === 'string' && v.length > 0;
+  if (!data || typeof data !== 'object') return [`${kind}: not an object`];
+  switch (kind) {
+    case 'podcast_search': {
+      const shows = data.shows;
+      if (!Array.isArray(shows)) { problems.push('podcast_search: shows is not an array'); break; }
+      if (shows.length === 0) { problems.push('podcast_search: shows is empty'); break; }
+      if (!isStr(shows[0].showId)) problems.push('podcast_search: shows[0].showId missing/empty');
+      if (!isStr(shows[0].title)) problems.push('podcast_search: shows[0].title missing/empty');
+      break;
+    }
+    case 'podcast': {
+      if (!isStr(data.title)) problems.push('podcast: title missing/empty');
+      const eps = data.episodes;
+      if (!Array.isArray(eps)) { problems.push('podcast: episodes is not an array'); break; }
+      if (eps.length === 0) { problems.push('podcast: episodes is empty'); break; }
+      if (!isStr(eps[0].videoId)) problems.push('podcast: episodes[0].videoId missing/empty');
+      if (!isStr(eps[0].title)) problems.push('podcast: episodes[0].title missing/empty');
+      break;
+    }
+    default:
+      problems.push(`unknown kind: ${kind}`);
+  }
+  return problems;
+}
+
+module.exports = { parseDiscoveryOutput, makeRunner, getTrending, getRelated, getMoods, getMood, getGenreCharts, getPlaylist, validateDiscoveryShape, getPodcastSearch, getPodcast, validatePodcastShape };
