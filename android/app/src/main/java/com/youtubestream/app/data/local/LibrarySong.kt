@@ -22,4 +22,5 @@ data class LibrarySong(
     val size: Long,
     val dateAdded: Long,
     val artworkUrl: String? = null,   // remote YouTube thumbnail; null for imported songs
+    val videoId: String? = null,      // YouTube id when known (download, or Pi sidecar); null for Pi-only files
 )
