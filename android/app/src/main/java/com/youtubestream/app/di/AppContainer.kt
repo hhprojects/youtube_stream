@@ -6,6 +6,7 @@ import com.youtubestream.app.data.local.AppDatabase
 import com.youtubestream.app.data.local.MIGRATION_3_4
 import com.youtubestream.app.data.local.MIGRATION_4_5
 import com.youtubestream.app.data.local.MIGRATION_5_6
+import com.youtubestream.app.data.local.MIGRATION_6_7
 import com.youtubestream.app.data.network.ConnectivityObserver
 import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
@@ -98,7 +99,7 @@ class AppContainer(context: Context) {
     private val discoveryApi = buildApi<DiscoveryApi>(apiClient)          // cached on the Pi → 30s is plenty
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
-        .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         .fallbackToDestructiveMigration(dropAllTables = true)  // net for unhandled jumps only
         .build()
     private val songsDir = File(context.filesDir, "songs")
