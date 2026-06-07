@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
@@ -40,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -58,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.youtubestream.app.playback.AppRepeatMode
+import com.youtubestream.app.playback.formatSpeed
+import com.youtubestream.app.playback.nextPlaybackSpeed
 import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.playback.PlayerUiState
 import com.youtubestream.app.playback.QueueItem
@@ -254,6 +259,11 @@ private fun Scrubber(state: PlayerUiState, onSeek: (Long) -> Unit) {
 
 @Composable
 private fun Controls(state: PlayerUiState, connection: PlaybackConnection) {
+    if (state.isPodcast) EpisodeControls(state, connection) else SongControls(state, connection)
+}
+
+@Composable
+private fun SongControls(state: PlayerUiState, connection: PlaybackConnection) {
     val active = MaterialTheme.colorScheme.primary
     val idle = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
@@ -281,6 +291,30 @@ private fun Controls(state: PlayerUiState, connection: PlaybackConnection) {
                 AppRepeatMode.QUEUE -> Icon(Icons.Filled.Repeat, contentDescription = "Repeat queue", tint = active)
                 AppRepeatMode.TRACK -> Icon(Icons.Filled.RepeatOne, contentDescription = "Repeat track", tint = active)
             }
+        }
+    }
+}
+
+/** Episodes: speed toggle + skip −15s/+30s replace shuffle/prev/next/repeat (meaningless on one episode). */
+@Composable
+private fun EpisodeControls(state: PlayerUiState, connection: PlaybackConnection) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = { connection.setSpeed(nextPlaybackSpeed(state.playbackSpeed)) }) {
+            Text(formatSpeed(state.playbackSpeed), style = MaterialTheme.typography.titleMedium)
+        }
+        IconButton(onClick = { connection.seekBy(-15_000) }) {
+            Icon(Icons.Filled.FastRewind, contentDescription = "Skip back 15 seconds", modifier = Modifier.size(36.dp))
+        }
+        FilledIconButton(onClick = { connection.togglePlayPause() }, modifier = Modifier.size(72.dp)) {
+            if (state.isPlaying) Icon(Icons.Filled.Pause, contentDescription = "Pause", modifier = Modifier.size(36.dp))
+            else Icon(Icons.Filled.PlayArrow, contentDescription = "Play", modifier = Modifier.size(36.dp))
+        }
+        IconButton(onClick = { connection.seekBy(30_000) }) {
+            Icon(Icons.Filled.FastForward, contentDescription = "Skip forward 30 seconds", modifier = Modifier.size(36.dp))
         }
     }
 }

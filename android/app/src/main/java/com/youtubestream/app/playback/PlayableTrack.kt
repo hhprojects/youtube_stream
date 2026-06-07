@@ -14,4 +14,5 @@ data class PlayableTrack(
     val title: String,
     val artist: String,
     val artworkUri: String? = null,
+    val isPodcast: Boolean = false,   // long-form: player shows speed + skip controls. Default false (songs).
 )

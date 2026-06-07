@@ -90,3 +90,31 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         )
     }
 }
+
+/**
+ * v7 → v8: additive. Creates podcast_episodes + followed_shows without touching any existing table, so
+ * installs keep their library/history/playlists/recent-searches. No enforced FK (showId is a logical
+ * link — see PodcastEpisode). NOTE: no SQL DEFAULT clauses — a Kotlin field default (resumePositionMs = 0,
+ * isFinished = false) is NOT a column default, so Room's expected schema has none either; adding
+ * `DEFAULT` here would fail Room's startup identity check. Booleans are INTEGER (0/1).
+ * Re-versioned from v6→v7 at merge time: main claimed v7 for recent_searches, so podcasts moved to v7→v8.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `podcast_episodes` " +
+                "(`id` TEXT NOT NULL, `videoId` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                "`showName` TEXT NOT NULL, `showId` TEXT, `durationSeconds` INTEGER NOT NULL, " +
+                "`filename` TEXT NOT NULL, `localPath` TEXT NOT NULL, `size` INTEGER NOT NULL, " +
+                "`dateAdded` INTEGER NOT NULL, `artworkUrl` TEXT, `publishedDate` TEXT, " +
+                "`description` TEXT, `resumePositionMs` INTEGER NOT NULL, " +
+                "`isFinished` INTEGER NOT NULL, `lastPlayedAt` INTEGER, PRIMARY KEY(`id`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `followed_shows` " +
+                "(`showId` TEXT NOT NULL, `title` TEXT NOT NULL, `author` TEXT, " +
+                "`artworkUrl` TEXT, `dateFollowed` INTEGER NOT NULL, " +
+                "`lastSeenEpisodeVideoId` TEXT, PRIMARY KEY(`showId`))",
+        )
+    }
+}

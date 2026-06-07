@@ -7,12 +7,14 @@ import com.youtubestream.app.data.local.MIGRATION_3_4
 import com.youtubestream.app.data.local.MIGRATION_4_5
 import com.youtubestream.app.data.local.MIGRATION_5_6
 import com.youtubestream.app.data.local.MIGRATION_6_7
+import com.youtubestream.app.data.local.MIGRATION_7_8
 import com.youtubestream.app.data.network.ConnectivityObserver
 import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
 import com.youtubestream.app.data.playback.QueueDataStore
 import com.youtubestream.app.data.remote.BaseUrlInterceptor
 import com.youtubestream.app.data.remote.DiscoveryApi
+import com.youtubestream.app.data.remote.PodcastApi
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.repository.DownloadRepository
 import com.youtubestream.app.data.repository.ImportDownloadManager
@@ -20,12 +22,14 @@ import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.repository.PlayHistoryRepository
 import com.youtubestream.app.data.repository.PlaylistRepository
+import com.youtubestream.app.data.repository.PodcastRepository
 import com.youtubestream.app.data.repository.DiscoveryRepository
 import com.youtubestream.app.data.repository.RecentSearchRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsDataStore
 import com.youtubestream.app.playback.PlaybackConnection
+import com.youtubestream.app.playback.PodcastProgressWriter
 import com.youtubestream.app.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +92,14 @@ class AppContainer(context: Context) {
         .readTimeout(300, TimeUnit.SECONDS)  // big downloads
         .build()
 
+    // A 1-2h episode extraction on the Pi can far exceed the 5-min song download, so the podcast
+    // download POST needs a long read timeout (>= the backend's 30-min ceiling).
+    private val podcastDownloadClient = OkHttpClient.Builder()
+        .addInterceptor(BaseUrlInterceptor { currentUrl })
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(1800, TimeUnit.SECONDS)
+        .build()
+
     private inline fun <reified T> buildApi(client: OkHttpClient): T = Retrofit.Builder()
         .baseUrl("http://placeholder/")      // swapped per-request by the interceptor
         .client(client)
@@ -98,12 +110,15 @@ class AppContainer(context: Context) {
     private val api = buildApi<YoutubeStreamApi>(apiClient)               // search, library, delete — 30s timeout
     private val downloadApi = buildApi<YoutubeStreamApi>(downloadClient)  // the slow yt-dlp POST — 300s timeout
     private val discoveryApi = buildApi<DiscoveryApi>(apiClient)          // cached on the Pi → 30s is plenty
+    private val podcastApi = buildApi<PodcastApi>(apiClient)                       // home/show — cached on Pi
+    private val podcastDownloadApi = buildApi<PodcastApi>(podcastDownloadClient)   // the slow episode download POST
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
-        .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
         .fallbackToDestructiveMigration(dropAllTables = true)  // net for unhandled jumps only
         .build()
     private val songsDir = File(context.filesDir, "songs")
+    private val podcastsDir = File(context.filesDir, "podcasts")
 
     val searchRepository = SearchRepository(api)
     val discoveryRepository = DiscoveryRepository(discoveryApi)
@@ -113,6 +128,14 @@ class AppContainer(context: Context) {
     val recentSearchRepository = RecentSearchRepository(db.recentSearchDao())
     val piLibraryRepository = PiLibraryRepository(api)
     val downloadRepository = DownloadRepository(downloadApi, fileClient, db.libraryDao(), songsDir) { currentUrl }
+    val podcastRepository = PodcastRepository(
+        api = podcastApi,
+        downloadApi = podcastDownloadApi,
+        dao = db.podcastDao(),
+        fileClient = fileClient,
+        podcastsDir = podcastsDir,
+        baseUrl = { currentUrl },
+    )
 
     // Bulk Pi imports run here (app-scoped), so they keep going if the user leaves the Import screen.
     val importDownloadManager = ImportDownloadManager(downloadRepository, appScope)
@@ -126,6 +149,10 @@ class AppContainer(context: Context) {
 
     /** Mirrors playback state onto the home-screen widget. App-scoped; started once, lives for the process. */
     val widgetUpdater = WidgetUpdater(context, playbackConnection, appScope).also { it.start() }
+
+    /** Persists per-episode resume position. App-scoped; started once, lives for the process. */
+    val podcastProgressWriter =
+        PodcastProgressWriter(playbackConnection, podcastRepository, playbackScope).also { it.start() }
 
     init {
         // Self-heal: a track that failed to play (missing local file) is pruned from the library.

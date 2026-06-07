@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +51,8 @@ import com.youtubestream.app.ui.library.LibraryHomeScreen
 import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
+import com.youtubestream.app.ui.podcast.PodcastHomeScreen
+import com.youtubestream.app.ui.podcast.ShowDetailScreen
 import com.youtubestream.app.ui.playlist.PlaylistDetailScreen
 import com.youtubestream.app.ui.playlist.PlaylistSource
 import com.youtubestream.app.ui.playlist.SmartKind
@@ -62,6 +65,7 @@ import kotlinx.coroutines.launch
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
     Home("home", "Home", Icons.Filled.Home),
     Library("library", "Library", Icons.Filled.LibraryMusic),
+    Podcast("podcast", "Podcasts", Icons.Filled.Podcasts),
     Settings("settings", "Settings", Icons.Filled.Settings),
 }
 
@@ -172,6 +176,22 @@ fun AppNavHost(
                 }
                 composable(SEARCH_ROUTE) { SearchScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
+                composable(Dest.Podcast.route) {
+                    PodcastHomeScreen(
+                        onShowClick = { showId -> nav.navigate("podcast/show/$showId") },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                composable(
+                    "podcast/show/{showId}",
+                    arguments = listOf(navArgument("showId") { type = NavType.StringType }),
+                ) { entry ->
+                    ShowDetailScreen(
+                        showId = entry.arguments?.getString("showId").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 composable(Dest.Library.route) {
                     LibraryHomeScreen(
                         onOpenAllSongs = { nav.navigate("allSongs") },

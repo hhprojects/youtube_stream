@@ -23,4 +23,6 @@ data class PlayerUiState(
     val hasPrevious: Boolean = false,
     val queue: List<QueueItem> = emptyList(),
     val currentIndex: Int = 0,
+    val playbackSpeed: Float = 1f,
+    val isPodcast: Boolean = false,
 )

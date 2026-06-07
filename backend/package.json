@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "check:discovery": "node scripts/check-discovery.js"
+    "check:discovery": "node scripts/check-discovery.js",
+    "check:podcasts": "node scripts/check-podcasts.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

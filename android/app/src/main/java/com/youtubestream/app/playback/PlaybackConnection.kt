@@ -185,17 +185,22 @@ class PlaybackConnection(
             hasPrevious = c.hasPreviousMediaItem(),
             queue = c.snapshotQueue(),
             currentIndex = c.currentMediaItemIndex,
+            playbackSpeed = c.playbackParameters.speed,
+            isPodcast = currentQueue.getOrNull(c.currentMediaItemIndex)?.isPodcast == true,
         )
     }
 
     // --- Controls used by the UI ---
 
-    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int) {
+    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long) {
         val c = controller ?: return
         currentQueue = tracks
-        c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, 0L)
+        // Media3 applies the start position atomically at prepare — no post-prepare seek race.
+        c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, startPositionMs)
         c.prepare()
         c.play()
+        // A song queue plays at 1×; a podcast's chosen speed persists across episodes (don't reset it).
+        if (tracks.none { it.isPodcast }) c.setPlaybackSpeed(1f)
         saveNow()   // the high-value "new queue" event — persist now, don't risk the debounce window
     }
 
@@ -216,6 +221,14 @@ class PlaybackConnection(
     override fun cycleRepeat() {
         val c = controller ?: return
         c.repeatMode = RepeatModeMapper.toPlayer(RepeatModeMapper.next(RepeatModeMapper.toApp(c.repeatMode)))
+    }
+
+    override fun setSpeed(speed: Float) { controller?.setPlaybackSpeed(speed) }
+
+    override fun seekBy(deltaMs: Long) {
+        val c = controller ?: return
+        val target = (c.currentPosition + deltaMs).coerceIn(0L, if (c.duration > 0) c.duration else Long.MAX_VALUE)
+        c.seekTo(target)
     }
 
     override fun stop() {
