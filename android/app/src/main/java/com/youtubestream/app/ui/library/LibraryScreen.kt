@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,6 +41,7 @@ import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.SongArtwork
 import com.youtubestream.app.ui.components.SongRow
+import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
 fun LibraryScreen(modifier: Modifier = Modifier) {
@@ -47,6 +49,7 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<LibrarySong?>(null) }
     var editing by remember { mutableStateOf<LibrarySong?>(null) }
+    var addingTo by remember { mutableStateOf<LibrarySong?>(null) }
 
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -72,6 +75,9 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
                             artworkUrl = song.artworkUrl,
                             onClick = { vm.play(s.data, index) },
                             trailing = {
+                                IconButton(onClick = { addingTo = song }) {
+                                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
+                                }
                                 IconButton(onClick = { editing = song }) {
                                     Icon(Icons.Filled.Edit, contentDescription = "Edit artwork")
                                 }
@@ -146,5 +152,9 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
                 TextButton(onClick = { editing = null }) { Text("Cancel") }
             },
         )
+    }
+
+    addingTo?.let { song ->
+        AddToPlaylistSheet(song = song, onDismiss = { addingTo = null })
     }
 }
