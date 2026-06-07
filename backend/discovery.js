@@ -33,6 +33,8 @@ const getTrending = (run, cache, region) => cached(cache, `trending:${region}`, 
 const getRelated = (run, cache, videoId) => cached(cache, `related:${videoId}`, () => run('related', videoId));
 const getMoods = (run, cache) => cached(cache, 'moods', () => run('moods'));
 const getMood = (run, cache, params) => cached(cache, `mood:${params}`, () => run('mood', params));
+const getGenreCharts = (run, cache, region) => cached(cache, `genrecharts:${region}`, () => run('genrecharts', region));
+const getPlaylist = (run, cache, playlistId) => cached(cache, `playlist:${playlistId}`, () => run('playlist', playlistId));
 
 /**
  * Shape guard for discovery payloads. Returns a list of problem strings (empty = OK).
@@ -53,6 +55,7 @@ function validateDiscoveryShape(kind, data) {
     case 'trending':
     case 'related':
     case 'mood':
+    case 'playlist':
       checkSongs(data && data.songs, kind);
       break;
     case 'moods': {
@@ -63,10 +66,18 @@ function validateDiscoveryShape(kind, data) {
       if (!isStr(cats[0].title)) problems.push('moods: categories[0].title missing/empty');
       break;
     }
+    case 'genrecharts': {
+      const cs = data && data.charts;
+      if (!Array.isArray(cs)) { problems.push('genrecharts: charts is not an array'); break; }
+      if (cs.length === 0) { problems.push('genrecharts: charts is empty'); break; }
+      if (!isStr(cs[0].key)) problems.push('genrecharts: charts[0].key missing/empty');
+      if (!isStr(cs[0].title)) problems.push('genrecharts: charts[0].title missing/empty');
+      break;
+    }
     default:
       problems.push(`unknown kind: ${kind}`);
   }
   return problems;
 }
 
-module.exports = { parseDiscoveryOutput, makeRunner, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape };
+module.exports = { parseDiscoveryOutput, makeRunner, getTrending, getRelated, getMoods, getMood, getGenreCharts, getPlaylist, validateDiscoveryShape };

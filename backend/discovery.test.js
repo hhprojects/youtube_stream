@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createCache } = require('./cache');
-const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape } = require('./discovery');
+const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape, getGenreCharts, getPlaylist } = require('./discovery');
 
 const FIX = path.join(__dirname, 'test', 'fixtures', 'discovery');
 const raw = (name) => fs.readFileSync(path.join(FIX, name), 'utf8');
@@ -75,4 +75,26 @@ test('validateDiscoveryShape: flags drift (empty, missing fields, wrong type, un
   assert.ok(validateDiscoveryShape('moods', { categories: [{ title: 'Chill' }] }).length > 0);     // missing key
   assert.ok(validateDiscoveryShape('moods', { categories: [] }).length > 0);                       // empty
   assert.ok(validateDiscoveryShape('bogus', { songs: [{ id: 'v', title: 't' }] }).length > 0);     // unknown kind
+});
+
+test('getGenreCharts / getPlaylist cache + key independently', async () => {
+  const cache = createCache({ ttlMs: 10_000, now: () => 0 });
+  const seen = [];
+  const run = async (cmd, arg) => { seen.push([cmd, arg]); return { ok: true }; };
+  await getGenreCharts(run, cache, 'US');
+  await getPlaylist(run, cache, 'PL123');
+  await getGenreCharts(run, cache, 'US');   // cached
+  assert.deepEqual(seen, [['genrecharts', 'US'], ['playlist', 'PL123']]);
+});
+
+test('validateDiscoveryShape: genrecharts + playlist fixtures pass', () => {
+  assert.deepEqual(validateDiscoveryShape('genrecharts', parseDiscoveryOutput(raw('genrecharts.json'))), []);
+  assert.deepEqual(validateDiscoveryShape('playlist', parseDiscoveryOutput(raw('playlist.json'))), []);
+});
+
+test('validateDiscoveryShape: flags genrecharts/playlist drift', () => {
+  assert.ok(validateDiscoveryShape('genrecharts', { charts: [] }).length > 0);
+  assert.ok(validateDiscoveryShape('genrecharts', {}).length > 0);
+  assert.ok(validateDiscoveryShape('genrecharts', { charts: [{ title: 'Pop' }] }).length > 0); // missing key
+  assert.ok(validateDiscoveryShape('playlist', { songs: [] }).length > 0);                      // empty playlist
 });
