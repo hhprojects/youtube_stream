@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.youtubestream.app.data.local.AppDatabase
 import com.youtubestream.app.data.local.MIGRATION_3_4
+import com.youtubestream.app.data.local.MIGRATION_4_5
 import com.youtubestream.app.data.network.ConnectivityObserver
 import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
@@ -16,6 +17,7 @@ import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.repository.PlayHistoryRepository
+import com.youtubestream.app.data.repository.PlaylistRepository
 import com.youtubestream.app.data.repository.DiscoveryRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
@@ -95,7 +97,7 @@ class AppContainer(context: Context) {
     private val discoveryApi = buildApi<DiscoveryApi>(apiClient)          // cached on the Pi → 30s is plenty
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
-        .addMigrations(MIGRATION_3_4)
+        .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
         .fallbackToDestructiveMigration(dropAllTables = true)  // net for unhandled jumps only
         .build()
     private val songsDir = File(context.filesDir, "songs")
@@ -104,6 +106,7 @@ class AppContainer(context: Context) {
     val discoveryRepository = DiscoveryRepository(discoveryApi)
     val libraryRepository = LibraryRepository(db.libraryDao())
     val playHistoryRepository = PlayHistoryRepository(db.playEventDao())
+    val playlistRepository = PlaylistRepository(db.playlistDao())
     val piLibraryRepository = PiLibraryRepository(api)
     val downloadRepository = DownloadRepository(downloadApi, fileClient, db.libraryDao(), songsDir) { currentUrl }
 
