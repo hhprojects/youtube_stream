@@ -9,6 +9,7 @@ import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
 import com.youtubestream.app.data.playback.QueueDataStore
 import com.youtubestream.app.data.remote.BaseUrlInterceptor
+import com.youtubestream.app.data.remote.DiscoveryApi
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.repository.DownloadRepository
 import com.youtubestream.app.data.repository.ImportDownloadManager
@@ -81,15 +82,16 @@ class AppContainer(context: Context) {
         .readTimeout(300, TimeUnit.SECONDS)  // big downloads
         .build()
 
-    private fun buildApi(client: OkHttpClient): YoutubeStreamApi = Retrofit.Builder()
+    private inline fun <reified T> buildApi(client: OkHttpClient): T = Retrofit.Builder()
         .baseUrl("http://placeholder/")      // swapped per-request by the interceptor
         .client(client)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
-        .create(YoutubeStreamApi::class.java)
+        .create(T::class.java)
 
-    private val api = buildApi(apiClient)               // search, library, delete — 30s timeout
-    private val downloadApi = buildApi(downloadClient)  // the slow yt-dlp POST — 300s timeout
+    private val api = buildApi<YoutubeStreamApi>(apiClient)               // search, library, delete — 30s timeout
+    private val downloadApi = buildApi<YoutubeStreamApi>(downloadClient)  // the slow yt-dlp POST — 300s timeout
+    private val discoveryApi = buildApi<DiscoveryApi>(apiClient)          // cached on the Pi → 30s is plenty
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
         .addMigrations(MIGRATION_3_4)
