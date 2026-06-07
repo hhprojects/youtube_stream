@@ -16,6 +16,9 @@ interface PlaybackController {
     fun seekTo(positionMs: Long)
     fun toggleShuffle()
     fun cycleRepeat()
+    fun setSpeed(speed: Float)
+    /** Seek relative to the current position, clamped to [0, duration]. Used by podcast skip ±. */
+    fun seekBy(deltaMs: Long)
 
     /** Stop playback and clear the queue — the now-playing UI hides (currentMediaId → null). */
     fun stop()

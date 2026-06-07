@@ -59,6 +59,8 @@ class LibraryViewModelTest {
         override fun seekTo(positionMs: Long) {}
         override fun toggleShuffle() {}
         override fun cycleRepeat() {}
+        override fun setSpeed(speed: Float) {}
+        override fun seekBy(deltaMs: Long) {}
         override fun stop() {}
     }
 

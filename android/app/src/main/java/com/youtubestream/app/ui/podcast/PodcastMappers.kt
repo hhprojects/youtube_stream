@@ -42,4 +42,5 @@ fun PodcastEpisode.toPlayableTrack(): PlayableTrack = PlayableTrack(
     title = title,
     artist = showName,
     artworkUri = artworkUrl,
+    isPodcast = true,
 )
