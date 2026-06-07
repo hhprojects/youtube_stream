@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Thin CLI over ytmusicapi (unauthenticated). Prints one JSON object to stdout.
-Usage: python3 discovery.py <trending REGION | related VIDEO_ID | moods | mood PARAMS | genrecharts REGION | playlist PLAYLIST_ID>
+Usage: python3 discovery.py <trending REGION | related VIDEO_ID | moods | mood PARAMS | genrecharts REGION | playlist PLAYLIST_ID | podcast_search QUERY | podcast SHOW_ID>
 On failure: prints {"error": "..."} to stderr and exits non-zero."""
 import sys
 import json
@@ -30,6 +30,33 @@ def _to_song(item):
 
 def _songs_from(items):
     return [_to_song(i) for i in items if i.get("videoId") and i.get("title")]
+
+
+def _to_show(item):
+    # search(filter="podcasts") items are {title, browseId, thumbnails, resultType:"podcast"} — NO author.
+    return {
+        "showId": item.get("browseId"),
+        "title": item.get("title"),
+        "thumbnail": _thumb(item),
+    }
+
+
+def _author_name(author):
+    # get_podcast's author is a dict {name, id}; be defensive if it's ever a bare string / None.
+    if isinstance(author, dict):
+        return author.get("name")
+    return author or None
+
+
+def _to_episode(ep):
+    return {
+        "videoId": ep.get("videoId"),
+        "title": ep.get("title"),
+        "duration": ep.get("duration"),   # "1 hr 49 min" string — parsed on the client
+        "date": ep.get("date"),           # raw, DISPLAY-ONLY (unreliable: can be "35K views")
+        "description": ep.get("description"),
+        "thumbnail": _thumb(ep),
+    }
 
 
 def cmd_trending(yt, region):
@@ -85,6 +112,25 @@ def cmd_playlist(yt, playlist_id):
     return {"title": pl.get("title") or "", "songs": _songs_from(pl.get("tracks") or [])}
 
 
+def cmd_podcast_search(yt, query):
+    results = yt.search(query, filter="podcasts", limit=20) or []
+    shows = [_to_show(r) for r in results if r.get("browseId") and r.get("title")]
+    return {"shows": shows}
+
+
+def cmd_podcast(yt, show_id):
+    pod = yt.get_podcast(show_id, limit=50)
+    episodes = [_to_episode(e) for e in (pod.get("episodes") or []) if e.get("videoId")]
+    return {
+        "showId": show_id,
+        "title": pod.get("title") or "",
+        "author": _author_name(pod.get("author")),
+        "description": pod.get("description"),
+        "thumbnail": _thumb(pod),
+        "episodes": episodes,   # newest-first, as ytmusicapi returns them
+    }
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "missing command"}), file=sys.stderr)
@@ -106,6 +152,10 @@ def main():
             out = cmd_genrecharts(yt, region)
         elif cmd == "playlist":
             out = cmd_playlist(yt, sys.argv[2])
+        elif cmd == "podcast_search":
+            out = cmd_podcast_search(yt, sys.argv[2])
+        elif cmd == "podcast":
+            out = cmd_podcast(yt, sys.argv[2])
         else:
             print(json.dumps({"error": f"unknown command {cmd}"}), file=sys.stderr)
             sys.exit(2)
