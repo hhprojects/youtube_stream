@@ -17,6 +17,25 @@ const DOWNLOADS_MAX_BYTES = Number(process.env.DOWNLOADS_MAX_BYTES) || 2 * 1024 
 
 const YOUTUBE_ID_REGEX = /^[\w-]{1,20}$/;
 
+// --- Podcasts ---
+// Separate download bucket: podcasts are MANUAL-DELETE-ONLY (no auto-prune), so episodes never
+// evict music and vice versa.
+const PODCAST_DIR = process.env.PODCAST_DIR || path.join(__dirname, 'podcasts');
+// Fixed curated categories for the Podcast home (edit to change interests).
+const PODCAST_CATEGORIES = [
+  { label: 'Programming & Dev', query: 'software engineering podcast' },
+  { label: 'AI', query: 'artificial intelligence podcast' },
+  { label: 'Business & Startups', query: 'startup business podcast' },
+  { label: 'Finance', query: 'personal finance podcast' },
+  { label: 'Self-improvement', query: 'self improvement podcast' },
+];
+// Featured show browseIds — resolve once via `discovery.py podcast_search "<name>"` and pin them here
+// (e.g. Android Developers, Apple Developer). Empty is valid: /home just omits the Featured shelf.
+const FEATURED_SHOW_IDS = [];
+// Real browseIds run ~38-39 chars; the sidecar runs via execFile (no shell → no injection surface),
+// so this is a generous sanity cap, not a security bound. Do NOT tighten toward 40 (some shows exceed it).
+const SHOW_ID_REGEX = /^[\w-]{1,128}$/;
+
 const DISCOVERY_TTL_MS = Number(process.env.DISCOVERY_TTL_MS) || 12 * 60 * 60 * 1000;
 const discoveryCache = createCache({ ttlMs: DISCOVERY_TTL_MS });
 const runDiscovery = discovery.makeRunner();
@@ -32,6 +51,21 @@ function sendDiscovery(res, promise) {
 
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(PODCAST_DIR)) {
+  fs.mkdirSync(PODCAST_DIR, { recursive: true });
+}
+
+// Shared yt-dlp error → user message mapping (used by the podcast download route).
+function ytDlpErrorMessage(error, stderr) {
+  const errMsg = (error.message || stderr || '').toLowerCase();
+  if (errMsg.includes('ffmpeg') || errMsg.includes('ffprobe')) {
+    return 'FFmpeg is required for audio conversion. Install FFmpeg and add it to your PATH.';
+  }
+  if (errMsg.includes('getaddrinfo failed') || errMsg.includes('failed to resolve')) {
+    return 'Network error: Could not reach YouTube. Check your internet connection.';
+  }
+  return 'Download failed';
 }
 
 function pruneDownloads(dir = DOWNLOAD_DIR, maxBytes = DOWNLOADS_MAX_BYTES) {
@@ -82,6 +116,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use('/downloads', express.static(DOWNLOAD_DIR));
+app.use('/podcasts', express.static(PODCAST_DIR));
 
 function parseArtistTitle(rawTitle) {
   const separators = [' - ', ' — ', ' – ', ' | '];
@@ -312,6 +347,101 @@ app.get('/api/discovery/playlist', (req, res) => {
   const id = String(req.query.id || '');
   if (!id) return res.status(400).json({ error: 'id required' });
   sendDiscovery(res, discovery.getPlaylist(runDiscovery, discoveryCache, id));
+});
+
+// --- Podcasts ---
+
+app.get('/api/podcasts/home', async (req, res) => {
+  // Per-shelf degrade: one failing category must not blank the whole home.
+  const categoryShelves = await Promise.all(PODCAST_CATEGORIES.map(async (cat) => {
+    try {
+      const data = await discovery.getPodcastSearch(runDiscovery, discoveryCache, cat.query);
+      return { label: cat.label, shows: data.shows || [] };
+    } catch {
+      return { label: cat.label, shows: [] };
+    }
+  }));
+  let featuredShelf = [];
+  if (FEATURED_SHOW_IDS.length) {
+    const shows = await Promise.all(FEATURED_SHOW_IDS.map(async (id) => {
+      try {
+        const pod = await discovery.getPodcast(runDiscovery, discoveryCache, id);
+        return { showId: id, title: pod.title, thumbnail: pod.thumbnail };
+      } catch {
+        return null;
+      }
+    }));
+    const ok = shows.filter(Boolean);
+    if (ok.length) featuredShelf = [{ label: 'Featured shows', shows: ok }];
+  }
+  res.json({ shelves: [...featuredShelf, ...categoryShelves] });
+});
+
+app.get('/api/podcasts/show/:showId', (req, res) => {
+  const showId = String(req.params.showId || '');
+  if (!SHOW_ID_REGEX.test(showId)) return res.status(400).json({ error: 'Valid showId required' });
+  sendDiscovery(res, discovery.getPodcast(runDiscovery, discoveryCache, showId));
+});
+
+app.get('/api/podcasts/search', (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'q required' });
+  sendDiscovery(res, discovery.getPodcastSearch(runDiscovery, discoveryCache, q));
+});
+
+app.post('/api/podcasts/shows/latest', async (req, res) => {
+  const showIds = Array.isArray(req.body && req.body.showIds) ? req.body.showIds : [];
+  const shows = await Promise.all(showIds.map(async (rawId) => {
+    const id = String(rawId);
+    if (!SHOW_ID_REGEX.test(id)) return { showId: id, title: null, episodes: [] };
+    try {
+      const pod = await discovery.getPodcast(runDiscovery, discoveryCache, id);  // reuses per-show cache
+      return { showId: id, title: pod.title, episodes: pod.episodes || [] };     // newest-first
+    } catch {
+      return { showId: id, title: null, episodes: [] };
+    }
+  }));
+  res.json({ shows });
+});
+
+app.post('/api/podcasts/download', (req, res) => {
+  const { videoId, title, showName, showId, date, description, artworkUrl } = req.body || {};
+  if (!videoId || !YOUTUBE_ID_REGEX.test(String(videoId))) {
+    return res.status(400).json({ error: 'Valid video ID is required' });
+  }
+  const safeTitle = String(title || videoId).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+  const filename = `${safeTitle}.m4a`;
+  const outputPath = path.join(PODCAST_DIR, filename);
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  // 30-min ceiling: a 1-2h episode extraction can exceed the song path's 5-min timeout.
+  execFile('yt-dlp', ['-x', '--audio-format', 'm4a', '-o', outputPath, ytUrl], { timeout: 1800000 }, (error, stdout, stderr) => {
+    if (error) return res.status(500).json({ error: ytDlpErrorMessage(error, stderr) });
+    try {
+      const stats = fs.statSync(outputPath);
+      // Structured sidecar built straight from the request fields — NEVER parseArtistTitle
+      // (episode titles routinely contain " - ", which that helper would mangle).
+      try {
+        writeSidecar(PODCAST_DIR, filename, {
+          videoId,
+          title: title || safeTitle,
+          showName: showName || 'Unknown',
+          showId: showId || null,
+          date: date || null,
+          description: description || null,
+          artworkUrl: artworkUrl || null,
+        });
+      } catch {}
+      res.json({
+        success: true,
+        filename,
+        downloadUrl: `http://${SERVER_URL}/podcasts/${encodeURIComponent(filename)}`,
+        size: stats.size,
+      });
+      // No pruneDownloads() — podcasts are manual-delete-only.
+    } catch {
+      res.status(500).json({ error: 'Failed to access downloaded file' });
+    }
+  });
 });
 
 if (require.main === module) {
