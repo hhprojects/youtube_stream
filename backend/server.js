@@ -5,6 +5,8 @@ const cors = require('cors');
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { createCache } = require('./cache');
+const discovery = require('./discovery');
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
@@ -14,6 +16,19 @@ const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || path.join(__dirname, 'downloads
 const DOWNLOADS_MAX_BYTES = Number(process.env.DOWNLOADS_MAX_BYTES) || 2 * 1024 * 1024 * 1024;
 
 const YOUTUBE_ID_REGEX = /^[\w-]{1,20}$/;
+
+const DISCOVERY_TTL_MS = Number(process.env.DISCOVERY_TTL_MS) || 12 * 60 * 60 * 1000;
+const discoveryCache = createCache({ ttlMs: DISCOVERY_TTL_MS });
+const runDiscovery = discovery.makeRunner();
+
+function sendDiscovery(res, promise) {
+  promise
+    .then((data) => res.json(data))
+    .catch((e) => {
+      console.warn('[discovery] failed', e.message);
+      res.status(502).json({ error: 'Discovery unavailable' });   // client degrades this shelf away
+    });
+}
 
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
@@ -245,6 +260,28 @@ app.delete('/api/library/:filename', (req, res) => {
   } catch {
     res.status(500).json({ error: 'Failed to delete file' });
   }
+});
+
+app.get('/api/discovery/trending', (req, res) => {
+  let region = String(req.query.region || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(region)) region = 'US';
+  sendDiscovery(res, discovery.getTrending(runDiscovery, discoveryCache, region));
+});
+
+app.get('/api/discovery/related', (req, res) => {
+  const videoId = String(req.query.videoId || '');
+  if (!YOUTUBE_ID_REGEX.test(videoId)) return res.status(400).json({ error: 'Valid videoId required' });
+  sendDiscovery(res, discovery.getRelated(runDiscovery, discoveryCache, videoId));
+});
+
+app.get('/api/discovery/moods', (req, res) => {
+  sendDiscovery(res, discovery.getMoods(runDiscovery, discoveryCache));
+});
+
+app.get('/api/discovery/mood', (req, res) => {
+  const params = String(req.query.params || '');
+  if (!params) return res.status(400).json({ error: 'params required' });
+  sendDiscovery(res, discovery.getMood(runDiscovery, discoveryCache, params));
 });
 
 if (require.main === module) {
