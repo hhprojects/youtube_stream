@@ -52,6 +52,11 @@ async function main() {
   if (seedId) record('related', 'related', await run('related', seedId));
   else problems.push('[related] skipped — no seed videoId available (trending is broken)');
 
+  record('genrecharts', 'genrecharts', await run('genrecharts', 'US'));   // genres section is US-only
+  const genreId = captured.genrecharts && captured.genrecharts.charts && captured.genrecharts.charts[0] && captured.genrecharts.charts[0].key;
+  if (genreId) record('playlist', 'playlist', await run('playlist', genreId));
+  else problems.push('[playlist] skipped — no genre playlistId available (genrecharts broken)');
+
   if (problems.length) {
     console.error('DISCOVERY DRIFT DETECTED — ytmusicapi output no longer matches what discovery.py expects:');
     for (const p of problems) console.error('  - ' + p);

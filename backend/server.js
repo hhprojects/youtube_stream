@@ -284,6 +284,18 @@ app.get('/api/discovery/mood', (req, res) => {
   sendDiscovery(res, discovery.getMood(runDiscovery, discoveryCache, params));
 });
 
+app.get('/api/discovery/genre-charts', (req, res) => {
+  let region = String(req.query.region || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(region)) region = 'US';
+  sendDiscovery(res, discovery.getGenreCharts(runDiscovery, discoveryCache, region));
+});
+
+app.get('/api/discovery/playlist', (req, res) => {
+  const id = String(req.query.id || '');
+  if (!id) return res.status(400).json({ error: 'id required' });
+  sendDiscovery(res, discovery.getPlaylist(runDiscovery, discoveryCache, id));
+});
+
 if (require.main === module) {
   pruneDownloads();
   app.listen(PORT, HOST, () => {
