@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createCache } = require('./cache');
-const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood } = require('./discovery');
+const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape } = require('./discovery');
 
 const FIX = path.join(__dirname, 'test', 'fixtures', 'discovery');
 const raw = (name) => fs.readFileSync(path.join(FIX, name), 'utf8');
@@ -56,4 +56,23 @@ test('getMoods / getMood / getRelated key independently', async () => {
   await getRelated(run, cache, 'vid123');
   await getMoods(run, cache);            // cached, no new call
   assert.deepEqual(seen, [['moods', undefined], ['mood', 'TOKEN'], ['related', 'vid123']]);
+});
+
+// --- drift guard ---
+
+test('validateDiscoveryShape: every committed fixture has the expected shape', () => {
+  assert.deepEqual(validateDiscoveryShape('trending', parseDiscoveryOutput(raw('trending.json'))), []);
+  assert.deepEqual(validateDiscoveryShape('related', parseDiscoveryOutput(raw('related.json'))), []);
+  assert.deepEqual(validateDiscoveryShape('mood', parseDiscoveryOutput(raw('mood.json'))), []);
+  assert.deepEqual(validateDiscoveryShape('moods', parseDiscoveryOutput(raw('moods.json'))), []);
+});
+
+test('validateDiscoveryShape: flags drift (empty, missing fields, wrong type, unknown kind)', () => {
+  assert.ok(validateDiscoveryShape('trending', { songs: [] }).length > 0);                         // empty
+  assert.ok(validateDiscoveryShape('trending', {}).length > 0);                                    // no songs key
+  assert.ok(validateDiscoveryShape('trending', { songs: [{ id: '', title: 'x' }] }).length > 0);   // blank id
+  assert.ok(validateDiscoveryShape('related', { songs: [{ id: 'v', title: '' }] }).length > 0);    // blank title
+  assert.ok(validateDiscoveryShape('moods', { categories: [{ title: 'Chill' }] }).length > 0);     // missing key
+  assert.ok(validateDiscoveryShape('moods', { categories: [] }).length > 0);                       // empty
+  assert.ok(validateDiscoveryShape('bogus', { songs: [{ id: 'v', title: 't' }] }).length > 0);     // unknown kind
 });

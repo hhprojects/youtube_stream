@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "check:discovery": "node scripts/check-discovery.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
