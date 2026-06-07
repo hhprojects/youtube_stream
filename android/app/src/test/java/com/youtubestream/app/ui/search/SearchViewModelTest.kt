@@ -3,6 +3,8 @@ package com.youtubestream.app.ui.search
 import app.cash.turbine.test
 import com.youtubestream.app.data.local.LibraryDao
 import com.youtubestream.app.data.local.LibrarySong
+import com.youtubestream.app.data.local.RecentSearch
+import com.youtubestream.app.data.local.RecentSearchDao
 import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.SearchResult
 import com.youtubestream.app.data.remote.YoutubeStreamApi
@@ -14,6 +16,7 @@ import com.youtubestream.app.data.remote.dto.SearchResultDto
 import com.youtubestream.app.data.network.ReachabilitySource
 import com.youtubestream.app.data.network.ServerStatus
 import com.youtubestream.app.data.repository.LibraryRepository
+import com.youtubestream.app.data.repository.RecentSearchRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.ui.UiState
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -60,6 +64,17 @@ class SearchViewModelTest {
         override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
     }
 
+    private class FakeRecentSearchDao(initial: List<RecentSearch> = emptyList()) : RecentSearchDao {
+        val rows = MutableStateFlow(initial)
+        override suspend fun upsert(row: RecentSearch) = rows.update { list ->
+            listOf(row) + list.filterNot { it.query == row.query }   // REPLACE: newest first, dedup by query
+        }
+        override fun recent(limit: Int): Flow<List<RecentSearch>> =
+            rows.map { list -> list.sortedByDescending { it.usedAt }.take(limit) }
+        override suspend fun delete(value: String) = rows.update { l -> l.filterNot { it.query == value } }
+        override suspend fun clear() = rows.update { emptyList() }
+    }
+
     private fun fakeReachability() = object : ReachabilitySource {
         override val status: StateFlow<ServerStatus> = MutableStateFlow(ServerStatus.REACHABLE)
         override suspend fun probe() {}
@@ -70,11 +85,13 @@ class SearchViewModelTest {
         downloader: (String, String, String?) -> Flow<DownloadState> = { _, _, _ -> emptyFlow() },
         dao: FakeDao = FakeDao(),
         reachability: ReachabilitySource = fakeReachability(),
+        recentsDao: FakeRecentSearchDao = FakeRecentSearchDao(),
     ) = SearchViewModel(
         repo = SearchRepository(fakeApi(onSearch)),
         downloader = { id, title, artwork -> downloader(id, title, artwork) },
         library = LibraryRepository(dao),
         reachability = reachability,
+        recentsRepo = RecentSearchRepository(recentsDao),
     )
 
     // --- search (migrated from Plan 3) ---
@@ -148,6 +165,17 @@ class SearchViewModelTest {
         vm.downloadedIds.test {
             assertEquals(emptySet<String>(), awaitItem())   // stateIn initial
             assertEquals(setOf("v1"), awaitItem())          // videoIds present in the library
+        }
+    }
+
+    // --- recents (new) ---
+
+    @Test fun searchRecordsNormalizedRecent() = runTest {
+        val vm = vmWith(onSearch = { SearchResponseDto(emptyList()) })
+        vm.recents.test {
+            assertEquals(emptyList<String>(), awaitItem())     // stateIn initial
+            vm.search("  lofi   beats ")
+            assertEquals(listOf("lofi beats"), awaitItem())    // trimmed + collapsed + saved
         }
     }
 }
