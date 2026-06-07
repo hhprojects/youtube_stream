@@ -48,6 +48,7 @@ data class LibrarySongDto(
     val size: Long,
     val dateAdded: String,          // ISO date string (Express-serialized Date)
     val thumbnail: String? = null,  // ytimg URL derived from the Pi sidecar; null when unknown
+    val videoId: String? = null,    // YouTube id from the Pi sidecar; null for Pi-only files
 )
 
 @Serializable

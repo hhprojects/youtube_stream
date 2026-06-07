@@ -80,7 +80,7 @@ class DownloadRepository(
                 size = song.size,
                 dateAdded = System.currentTimeMillis(),
                 artworkUrl = song.thumbnailUrl,   // correct art from the Pi sidecar (null → placeholder)
-                videoId = null,            // Slice 2 fills this from the Pi sidecar
+                videoId = song.videoId,    // from the Pi sidecar (null for Pi-only files)
             )
             dao.insert(row)
             emit(DownloadState.Completed(row))

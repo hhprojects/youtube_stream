@@ -30,4 +30,5 @@ private fun LibrarySongDto.toDomain() = PiSong(
     downloadUrl = downloadUrl,
     size = size,
     thumbnailUrl = thumbnail,
+    videoId = videoId,
 )   // backend 'duration' ('Unknown') and dateAdded are dropped — not used by the Import screen
