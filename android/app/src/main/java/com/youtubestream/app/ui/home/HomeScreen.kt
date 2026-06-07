@@ -16,10 +16,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
+import com.youtubestream.app.ui.discover.DiscoverUiState
+import com.youtubestream.app.ui.discover.DiscoverViewModel
+import com.youtubestream.app.ui.discover.DiscoveryDownloads
+import com.youtubestream.app.ui.discover.discoverSection
 import com.youtubestream.app.ui.library.toPlayableTrack
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(onOpenMood: (String) -> Unit, modifier: Modifier = Modifier) {
     val vm = appViewModel { c ->
         HomeViewModel(
             observeLibrary = { c.libraryRepository.observeLibrary() },
@@ -29,27 +33,49 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             },
         )
     }
+    val discoverVm = appViewModel { c ->
+        DiscoverViewModel(
+            source = c.discoveryRepository,
+            reachability = c.serverReachability,
+            observeLibrary = { c.libraryRepository.observeLibrary() },
+            observeHistory = { c.playHistoryRepository.observe() },
+            downloads = DiscoveryDownloads(
+                downloader = c.downloadRepository,
+                play = { song -> c.playbackConnection.setQueueAndPlay(listOf(song.toPlayableTrack()), 0) },
+            ),
+        )
+    }
     val state by vm.state.collectAsStateWithLifecycle()
+    val discover by discoverVm.state.collectAsStateWithLifecycle()
+    val discoverDownloads by discoverVm.downloadsState.collectAsStateWithLifecycle()
+
+    val forYouShelves = (state as? UiState.Content)?.data.orEmpty()
+    val nothingToShow = state is UiState.Content && forYouShelves.isEmpty() && discover is DiscoverUiState.Hidden
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when (val s = state) {
-            is UiState.Idle, is UiState.Loading -> CircularProgressIndicator()
-            is UiState.Error -> Text("Error: ${s.message}")
-            is UiState.Content -> if (s.data.isEmpty()) {
+        when {
+            state is UiState.Error -> Text("Error: ${(state as UiState.Error).message}")
+            state is UiState.Idle || (state is UiState.Loading && discover is DiscoverUiState.Loading) ->
+                CircularProgressIndicator()
+            nothingToShow ->
                 Text("No music yet. Download a song and it'll show up here.")
-            } else {
-                LazyColumn(
-                    Modifier.fillMaxSize().padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    items(s.data, key = { it.id.name }) { shelf ->
-                        ShelfCardRow(
-                            title = shelf.title,
-                            cards = shelf.songs.map { it.toCard() },
-                            downloadingKeys = emptySet(),
-                        ) { index -> vm.onPlay(shelf.songs, index) }
-                    }
+            else -> LazyColumn(
+                Modifier.fillMaxSize().padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                items(forYouShelves, key = { "foryou-" + it.id.name }) { shelf ->
+                    ShelfCardRow(
+                        title = shelf.title,
+                        cards = shelf.songs.map { it.toCard() },
+                        downloadingKeys = emptySet(),
+                    ) { index -> vm.onPlay(shelf.songs, index) }
                 }
+                discoverSection(
+                    state = discover,
+                    downloadingKeys = discoverDownloads.keys,
+                    onSongClick = discoverVm::onSongClick,
+                    onOpenMood = onOpenMood,
+                )
             }
         }
     }

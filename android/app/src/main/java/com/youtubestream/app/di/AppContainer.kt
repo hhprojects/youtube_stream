@@ -16,6 +16,7 @@ import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.repository.PlayHistoryRepository
+import com.youtubestream.app.data.repository.DiscoveryRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsDataStore
@@ -100,6 +101,7 @@ class AppContainer(context: Context) {
     private val songsDir = File(context.filesDir, "songs")
 
     val searchRepository = SearchRepository(api)
+    val discoveryRepository = DiscoveryRepository(discoveryApi)
     val libraryRepository = LibraryRepository(db.libraryDao())
     val playHistoryRepository = PlayHistoryRepository(db.playEventDao())
     val piLibraryRepository = PiLibraryRepository(api)

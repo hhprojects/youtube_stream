@@ -145,7 +145,12 @@ fun AppNavHost(
             },
         ) { padding ->
             NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding).padding(bottom = if (miniBarVisible) peekHeight else 0.dp)) {
-                composable(Dest.Home.route) { HomeScreen(Modifier.fillMaxSize()) }
+                composable(Dest.Home.route) {
+                    HomeScreen(
+                        onOpenMood = { key -> nav.navigate("mood?key=" + android.net.Uri.encode(key)) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 composable(Dest.Search.route) { SearchScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Library.route) {
