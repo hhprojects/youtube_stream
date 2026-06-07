@@ -36,11 +36,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.youtubestream.app.di.AppContainer
+import com.youtubestream.app.ui.discover.MoodDetailScreen
 import com.youtubestream.app.ui.home.HomeScreen
 import com.youtubestream.app.ui.imports.ImportScreen
 import com.youtubestream.app.ui.library.LibraryScreen
@@ -157,6 +160,16 @@ fun AppNavHost(
                     LibraryScreen(modifier = Modifier.fillMaxSize())
                 }
                 composable("import") { ImportScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
+                composable(
+                    "mood?key={key}",
+                    arguments = listOf(navArgument("key") { type = NavType.StringType; defaultValue = "" }),
+                ) { entry ->
+                    MoodDetailScreen(
+                        key = entry.arguments?.getString("key").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
 
