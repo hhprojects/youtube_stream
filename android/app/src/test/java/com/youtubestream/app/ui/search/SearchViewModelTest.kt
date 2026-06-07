@@ -142,11 +142,12 @@ class SearchViewModelTest {
     }
 
     @Test fun downloadedIdsReflectLibrary() = runTest {
-        val dao = FakeDao(listOf(LibrarySong("v1", "T", "A", 0, "v1.m4a", "/songs/v1.m4a", 1L, 1L)))
+        // id is the filename now; the matchable "downloaded" key is the videoId.
+        val dao = FakeDao(listOf(LibrarySong("v1.m4a", "T", "A", 0, "v1.m4a", "/songs/v1.m4a", 1L, 1L, videoId = "v1")))
         val vm = vmWith(dao = dao)
         vm.downloadedIds.test {
             assertEquals(emptySet<String>(), awaitItem())   // stateIn initial
-            assertEquals(setOf("v1"), awaitItem())          // from the library flow
+            assertEquals(setOf("v1"), awaitItem())          // videoIds present in the library
         }
     }
 }

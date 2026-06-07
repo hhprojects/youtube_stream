@@ -41,9 +41,9 @@ class SearchViewModel(
     /** id → in-flight/failed download. Absent means "not downloading" (idle, or already done). */
     val downloads: StateFlow<Map<String, ItemDownload>> = _downloads.asStateFlow()
 
-    /** Ids already in the local library — rows render these as "downloaded". */
+    /** videoIds already in the local library — rows render these as "downloaded". (id is the filename now.) */
     val downloadedIds: StateFlow<Set<String>> = library.observeLibrary()
-        .map { songs -> songs.map { it.id }.toSet() }
+        .map { songs -> songs.mapNotNull { it.videoId }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /** App-wide Pi reachability — the screen shows a banner and gates controls on this. */
