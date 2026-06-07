@@ -104,3 +104,16 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         )
     }
 }
+
+/**
+ * v7 → v8: additive. Creates recent_searches without touching any existing table, so installs keep
+ * their library/history/playlists/podcasts. SQL copied verbatim from schemas/.../8.json (Room-generated).
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `recent_searches` " +
+                "(`query` TEXT NOT NULL, `usedAt` INTEGER NOT NULL, PRIMARY KEY(`query`))",
+        )
+    }
+}
