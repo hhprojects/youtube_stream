@@ -47,3 +47,5 @@ coverage/
 docs/
 # Claude Code working context — local-only, like docs/.
 CLAUDE.md
+# Claude Code agent state — worktrees, local config, session scratch.
+.claude/
