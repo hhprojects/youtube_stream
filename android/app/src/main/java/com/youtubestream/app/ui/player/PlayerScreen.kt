@@ -81,8 +81,12 @@ fun PlayerScreen(
     val upNext = state.queue.drop(state.currentIndex + 1)
 
     // Solid base so the sheet is never see-through: songs without artwork show this surface; songs with
-    // art show the blurred backdrop (opaque) on top of it.
-    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+    // art show the blurred backdrop (opaque) on top of it. A Surface (not a bare Box) is essential here:
+    // it sets LocalContentColor to onSurface, so the un-tinted Text/Icons below stay visible in dark mode.
+    // The player is drawn outside the Scaffold, so nothing else supplies a content color — a Box would
+    // leave them at the default black and they'd vanish on the dark surface (the MiniPlayer uses a Surface
+    // for the same reason). Surface stacks its children in an internal fill box, so the layout is unchanged.
+    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         // Immersive backdrop: the current art, blown up + blurred, tinted by a scrim for legibility.
         ArtBackdrop(state.artworkUri)
 
@@ -286,32 +290,38 @@ private fun UpNextRow(item: QueueItem) {
 
 @Composable
 private fun EmptyPlayer(modifier: Modifier, onBrowseLibrary: () -> Unit) {
-    Column(
-        modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.size(96.dp),
+    // Same reasoning as the main player body: a Surface (not a bare Column) makes this opaque AND sets
+    // LocalContentColor to onSurface, so the "Nothing playing" title stays visible in dark mode instead
+    // of falling back to the default black. Reachable via the widget's open-player deep link when nothing
+    // is loaded, so it's a real path, not just theoretical.
+    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Column(
+            Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Filled.MusicNote,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(96.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Filled.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+            Text("Nothing playing", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Pick a song from your Library to start playing.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Button(onClick = onBrowseLibrary) { Text("Go to Library") }
         }
-        Text("Nothing playing", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Pick a song from your Library to start playing.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Button(onClick = onBrowseLibrary) { Text("Go to Library") }
     }
 }
