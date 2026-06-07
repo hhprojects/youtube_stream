@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface PlaybackController {
     val state: StateFlow<PlayerUiState>
-    fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int = 0)
+    fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int = 0, startPositionMs: Long = 0L)
     fun togglePlayPause()
     fun next()
     fun previous()

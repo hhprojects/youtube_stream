@@ -50,7 +50,7 @@ class LibraryViewModelTest {
         override val state: StateFlow<PlayerUiState> = MutableStateFlow(PlayerUiState())
         var lastTracks: List<PlayableTrack>? = null
         var lastStartIndex: Int = -1
-        override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int) {
+        override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long) {
             lastTracks = tracks; lastStartIndex = startIndex
         }
         override fun togglePlayPause() {}

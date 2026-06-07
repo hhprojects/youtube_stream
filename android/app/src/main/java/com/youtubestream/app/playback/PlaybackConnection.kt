@@ -190,10 +190,11 @@ class PlaybackConnection(
 
     // --- Controls used by the UI ---
 
-    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int) {
+    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long) {
         val c = controller ?: return
         currentQueue = tracks
-        c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, 0L)
+        // Media3 applies the start position atomically at prepare — no post-prepare seek race.
+        c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, startPositionMs)
         c.prepare()
         c.play()
         saveNow()   // the high-value "new queue" event — persist now, don't risk the debounce window

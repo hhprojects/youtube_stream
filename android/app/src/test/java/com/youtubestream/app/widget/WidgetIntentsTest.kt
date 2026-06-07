@@ -12,7 +12,7 @@ import org.junit.Test
 private class RecordingController : PlaybackController {
     override val state: StateFlow<PlayerUiState> = MutableStateFlow(PlayerUiState())
     val calls = mutableListOf<String>()
-    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int) { calls += "setQueueAndPlay" }
+    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long) { calls += "setQueueAndPlay" }
     override fun togglePlayPause() { calls += "togglePlayPause" }
     override fun next() { calls += "next" }
     override fun previous() { calls += "previous" }
