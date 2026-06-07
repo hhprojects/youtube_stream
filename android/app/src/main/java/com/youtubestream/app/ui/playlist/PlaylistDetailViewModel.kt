@@ -62,4 +62,9 @@ class PlaylistDetailViewModel(
     fun removeSong(songId: String) {
         viewModelScope.launch { playlists.removeSong(playlistId, songId) }
     }
+
+    /** Persist a drag-reordered order. [orderedSongIds] comes from PlaylistReorder.reorder(...). */
+    fun reorder(orderedSongIds: List<String>) {
+        viewModelScope.launch { playlists.setOrder(playlistId, orderedSongIds) }
+    }
 }
