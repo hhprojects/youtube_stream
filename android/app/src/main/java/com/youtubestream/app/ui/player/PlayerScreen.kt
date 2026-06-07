@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +87,9 @@ fun PlayerScreen(
         ArtBackdrop(state.artworkUri)
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+            // systemBarsPadding keeps content (chevron, art, controls, queue) inside the safe area —
+            // the ArtBackdrop above stays full-bleed under the status/nav bars for the immersive look.
+            modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item { PlayerHeader(onMinimize = onMinimize, onStop = onStop) }
