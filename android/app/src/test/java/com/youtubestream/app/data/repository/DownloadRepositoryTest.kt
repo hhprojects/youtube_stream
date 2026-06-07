@@ -56,7 +56,8 @@ class DownloadRepositoryTest {
 
         assertTrue(states.any { it is DownloadState.InProgress })   // progress emitted
         val done = states.last() as DownloadState.Completed
-        assertEquals("v1", done.song.id)
+        assertEquals("v1.m4a", done.song.id)                        // canonical id = filename
+        assertEquals("v1", done.song.videoId)                       // YouTube id retained for match/seed
         assertEquals("http://img/v1.jpg", done.song.artworkUrl)     // thumbnail persisted onto the row
         assertTrue(File(songsDir, "v1.m4a").exists())               // file written
         assertEquals(listOf(done.song), dao.songs.value)           // row inserted
@@ -82,7 +83,7 @@ class DownloadRepositoryTest {
 
         assertTrue(states.any { it is DownloadState.InProgress })   // progress emitted
         val done = states.last() as DownloadState.Completed
-        assertEquals("s1", done.song.id)
+        assertEquals("s1.m4a", done.song.id)                        // canonical id = filename
         assertTrue(File(songsDir, "s1.m4a").exists())               // file written
         assertEquals(listOf(done.song), dao.songs.value)           // row inserted (no POST hit)
         server.shutdown()

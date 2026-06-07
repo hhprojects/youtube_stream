@@ -1,15 +1,15 @@
 package com.youtubestream.app.ui.discover
 
+import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.local.PlayEvent
 
-private val VIDEO_ID = Regex("^[A-Za-z0-9_-]{11}$")
-
 /**
- * The most-recently-played song id that is a real YouTube videoId (11 chars). Imported songs key on
- * a filename (e.g. "Song.m4a") and are skipped. null → no eligible seed, so the related shelf is omitted.
- * Pure: zero Android imports → JVM-tested.
+ * The videoId of the most-recently-played song that has one — the seed for the "related" shelf.
+ * Songs are keyed by filename now, so we resolve each play to its library row and read its videoId
+ * (imported/Pi-only songs have null → skipped). null → no eligible seed, shelf omitted. Pure: JVM-tested.
  */
-fun selectRelatedSeed(history: List<PlayEvent>): String? =
-    history.sortedByDescending { it.playedAt }
-        .map { it.songId }
-        .firstOrNull { VIDEO_ID.matches(it) }
+fun selectRelatedSeed(history: List<PlayEvent>, songs: List<LibrarySong>): String? {
+    val videoIdById = songs.associate { it.id to it.videoId }
+    return history.sortedByDescending { it.playedAt }
+        .firstNotNullOfOrNull { videoIdById[it.songId] }
+}

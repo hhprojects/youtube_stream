@@ -54,8 +54,11 @@ class DiscoverViewModelTest {
     private fun vm(
         source: DiscoverySource = FakeSource(),
         reach: FakeReach = FakeReach(ServerStatus.REACHABLE),
-        history: List<PlayEvent> = listOf(PlayEvent(songId = "dQw4w9WgXcQ", playedAt = 1L)),
-        library: List<LibrarySong> = emptyList(),
+        // History keys on the filename (the library id) now; the song carries the videoId the seed resolves to.
+        history: List<PlayEvent> = listOf(PlayEvent(songId = "song.m4a", playedAt = 1L)),
+        library: List<LibrarySong> = listOf(
+            LibrarySong("song.m4a", "T", "A", 0, "song.m4a", "", 0, 0, videoId = "dQw4w9WgXcQ"),
+        ),
     ) = DiscoverViewModel(
         source = source,
         reachability = reach,

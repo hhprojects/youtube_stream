@@ -58,8 +58,8 @@ class DiscoverViewModel(
     private suspend fun loadContent(): DiscoverContent = coroutineScope {
         val library = observeLibrary().first()
         val history = observeHistory().first()
-        val seedId = selectRelatedSeed(history)
-        val seedTitle = seedId?.let { id -> library.firstOrNull { it.id == id }?.title }
+        val seedId = selectRelatedSeed(history, library)   // seedId is a videoId
+        val seedTitle = seedId?.let { vid -> library.firstOrNull { it.videoId == vid }?.title }
 
         val trendingD = async { runCatching { source.trending(region()) }.getOrNull() }
         val relatedD = async { seedId?.let { runCatching { source.related(it) }.getOrNull() } }
