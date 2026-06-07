@@ -61,6 +61,7 @@ import com.youtubestream.app.playback.AppRepeatMode
 import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.playback.PlayerUiState
 import com.youtubestream.app.playback.QueueItem
+import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
 fun PlayerScreen(
@@ -78,6 +79,7 @@ fun PlayerScreen(
     }
 
     var expanded by remember { mutableStateOf(false) }
+    var addingToId by remember { mutableStateOf<String?>(null) }   // current track's id, pending add-to-playlist
     val upNext = state.queue.drop(state.currentIndex + 1)
 
     // Solid base so the sheet is never see-through: songs without artwork show this surface; songs with
@@ -96,7 +98,13 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item { PlayerHeader(onMinimize = onMinimize, onStop = onStop) }
+            item {
+                PlayerHeader(
+                    onMinimize = onMinimize,
+                    onStop = onStop,
+                    onAddToPlaylist = { state.currentMediaId?.let { addingToId = it } },
+                )
+            }
             item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
             item { TrackInfo(state.title, state.artist) }
             item { Scrubber(state) { ms -> connection.seekTo(ms) } }
@@ -105,11 +113,15 @@ fun PlayerScreen(
             if (expanded) items(upNext, key = { it.mediaId }) { item -> UpNextRow(item) }
         }
     }
+
+    addingToId?.let { id ->
+        AddToPlaylistSheet(songId = id, onDismiss = { addingToId = null })
+    }
 }
 
-/** Header for the expanded player: minimize chevron (left) + overflow ⋮ with Stop (right). */
+/** Header for the expanded player: minimize chevron (left) + overflow ⋮ with Add-to-playlist / Stop (right). */
 @Composable
-private fun PlayerHeader(onMinimize: () -> Unit, onStop: () -> Unit) {
+private fun PlayerHeader(onMinimize: () -> Unit, onStop: () -> Unit, onAddToPlaylist: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -124,6 +136,10 @@ private fun PlayerHeader(onMinimize: () -> Unit, onStop: () -> Unit) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "More")
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Add to playlist") },
+                    onClick = { menuOpen = false; onAddToPlaylist() },
+                )
                 DropdownMenuItem(
                     text = { Text("Stop") },
                     onClick = { menuOpen = false; onStop() },
