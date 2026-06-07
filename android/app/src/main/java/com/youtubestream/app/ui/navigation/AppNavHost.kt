@@ -43,7 +43,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.youtubestream.app.di.AppContainer
-import com.youtubestream.app.ui.discover.MoodDetailScreen
+import com.youtubestream.app.ui.discover.DiscoveryListScreen
 import com.youtubestream.app.ui.home.HomeScreen
 import com.youtubestream.app.ui.imports.ImportScreen
 import com.youtubestream.app.ui.library.LibraryHomeScreen
@@ -183,8 +183,10 @@ fun AppNavHost(
                     "mood?key={key}",
                     arguments = listOf(navArgument("key") { type = NavType.StringType; defaultValue = "" }),
                 ) { entry ->
-                    MoodDetailScreen(
-                        key = entry.arguments?.getString("key").orEmpty(),
+                    val key = entry.arguments?.getString("key").orEmpty()
+                    DiscoveryListScreen(
+                        load = { it.moodSongs(key) },
+                        fallbackTitle = "Mood",
                         onBack = { nav.popBackStack() },
                         modifier = Modifier.fillMaxSize(),
                     )

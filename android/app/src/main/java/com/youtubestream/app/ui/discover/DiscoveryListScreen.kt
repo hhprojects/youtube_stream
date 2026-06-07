@@ -29,19 +29,31 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.youtubestream.app.data.model.DiscoverySong
+import com.youtubestream.app.data.model.MoodDetail
+import com.youtubestream.app.data.repository.DiscoverySource
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.SongArtwork
 import com.youtubestream.app.ui.library.toPlayableTrack
 import com.youtubestream.app.ui.search.ItemDownload
 
+/**
+ * A remote {title, songs} list with tap->download->play. Used for both mood-detail and genre-chart.
+ * [load] fetches via the app's DiscoverySource; [titleOverride] (when non-null) is shown immediately
+ * (genre charts pass the cleaned genre name), else the loaded title, falling back to [fallbackTitle].
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoodDetailScreen(key: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun DiscoveryListScreen(
+    load: suspend (DiscoverySource) -> MoodDetail,
+    fallbackTitle: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    titleOverride: String? = null,
+) {
     val vm = appViewModel { c ->
-        MoodDetailViewModel(
-            key = key,
-            source = c.discoveryRepository,
+        DiscoveryListViewModel(
+            load = { load(c.discoveryRepository) },
             downloads = DiscoveryDownloads(
                 downloader = c.downloadRepository,
                 play = { song -> c.playbackConnection.setQueueAndPlay(listOf(song.toPlayableTrack()), 0) },
@@ -50,7 +62,9 @@ fun MoodDetailScreen(key: String, onBack: () -> Unit, modifier: Modifier = Modif
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val downloads by vm.downloadsState.collectAsStateWithLifecycle()
-    val title = (state as? UiState.Content)?.data?.title?.takeIf { it.isNotBlank() } ?: "Mood"
+    val title = titleOverride
+        ?: (state as? UiState.Content)?.data?.title?.takeIf { it.isNotBlank() }
+        ?: fallbackTitle
 
     Scaffold(
         modifier = modifier,
@@ -74,7 +88,7 @@ fun MoodDetailScreen(key: String, onBack: () -> Unit, modifier: Modifier = Modif
                 } else {
                     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(s.data.songs, key = { it.videoId }) { song ->
-                            MoodSongRow(song, downloads[song.videoId]) { vm.onSongClick(song) }
+                            DiscoverySongRow(song, downloads[song.videoId]) { vm.onSongClick(song) }
                         }
                     }
                 }
@@ -84,7 +98,7 @@ fun MoodDetailScreen(key: String, onBack: () -> Unit, modifier: Modifier = Modif
 }
 
 @Composable
-private fun MoodSongRow(song: DiscoverySong, download: ItemDownload?, onClick: () -> Unit) {
+private fun DiscoverySongRow(song: DiscoverySong, download: ItemDownload?, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

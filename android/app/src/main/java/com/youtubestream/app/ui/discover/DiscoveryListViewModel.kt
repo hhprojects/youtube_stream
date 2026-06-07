@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.model.DiscoverySong
 import com.youtubestream.app.data.model.MoodDetail
-import com.youtubestream.app.data.repository.DiscoverySource
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.search.ItemDownload
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,9 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class MoodDetailViewModel(
-    private val key: String,
-    private val source: DiscoverySource,
+/** Loads a {title, songs} list via an injected loader; shared by mood-detail and genre-chart screens. */
+class DiscoveryListViewModel(
+    private val load: suspend () -> MoodDetail,
     private val downloads: DiscoveryDownloads,
 ) : ViewModel() {
 
@@ -22,15 +21,15 @@ class MoodDetailViewModel(
     val state: StateFlow<UiState<MoodDetail>> = _state.asStateFlow()
     val downloadsState: StateFlow<Map<String, ItemDownload>> = downloads.downloads
 
-    init { load() }
+    init { reload() }
 
-    fun load() {
+    fun reload() {
         viewModelScope.launch {
             _state.value = UiState.Loading
             _state.value = try {
-                UiState.Content(source.moodSongs(key))
+                UiState.Content(load())
             } catch (e: Exception) {
-                UiState.Error(e.message ?: "Couldn't load this mood")
+                UiState.Error(e.message ?: "Couldn't load")
             }
         }
     }
