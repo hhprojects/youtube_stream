@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,27 +52,33 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.youtubestream.app.data.util.YouTubeUrl
 import com.youtubestream.app.playlist.PlaylistReorder
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.PlaylistCover
+import com.youtubestream.app.ui.components.SongArtwork
 import com.youtubestream.app.ui.components.SongRow
 import kotlin.math.roundToInt
 
 @Composable
-fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifier = Modifier) {
-    val vm = appViewModel { PlaylistDetailViewModel(it.playlistRepository, it.playbackConnection, playlistId) }
+fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val vm = appViewModel {
+        PlaylistDetailViewModel(it.playlistRepository, it.playHistoryRepository, it.playbackConnection, source)
+    }
+    val editable = vm.isEditable
     val state by vm.state.collectAsStateWithLifecycle()
     val closed by vm.closed.collectAsStateWithLifecycle()
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var editingCover by remember { mutableStateOf(false) }
 
-    // The playlist was deleted (here or elsewhere) → leave the detail page.
+    // The playlist was deleted (here or elsewhere) → leave the detail page. (Smart sources never close.)
     LaunchedEffect(closed) { if (closed) onBack() }
 
     val content = state as? UiState.Content
 
-    // --- Drag-to-reorder state ---------------------------------------------------------------
+    // --- Drag-to-reorder state (manual playlists only) ---------------------------------------
     // `working` is the order the list renders. It's seeded from the DB list and re-seeded whenever
     // that list changes (remember(songs)). On drop we set `working` locally AND persist; when Room
     // re-emits the same order its key is equal, so `working` is kept — no flash back to the old order
@@ -103,7 +110,8 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (content != null) {
+            // Overflow (rename / cover / delete) is for manual playlists only — smart ones are read-only.
+            if (editable && content != null) {
                 Box {
                     var menu by remember { mutableStateOf(false) }
                     IconButton(onClick = { menu = true }) {
@@ -111,6 +119,13 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
+                        DropdownMenuItem(text = { Text("Edit cover") }, onClick = { menu = false; editingCover = true })
+                        if (content.data.coverArtUrl != null) {
+                            DropdownMenuItem(
+                                text = { Text("Reset cover") },
+                                onClick = { menu = false; vm.setCover(null) },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Delete playlist") },
                             onClick = { menu = false; confirmDelete = true },
@@ -140,7 +155,11 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                         if (displayed.isEmpty()) {
                             item {
                                 Text(
-                                    "No songs yet. Add songs from \"All songs\".",
+                                    if (editable) {
+                                        "No songs yet. Add songs from \"All songs\"."
+                                    } else {
+                                        "Songs you play show up here."
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 16.dp),
@@ -151,9 +170,10 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                                 val isDragged = song.id == draggedId
                                 // The dragged row follows the finger via translationY; the OTHERS reflow
                                 // with animateItem(). Never both on one row — they'd fight and jitter.
+                                // Smart (read-only) rows don't reorder, so they get a plain modifier.
                                 val rowModifier =
-                                    if (isDragged) {
-                                        Modifier
+                                    when {
+                                        isDragged -> Modifier
                                             .zIndex(1f)
                                             .graphicsLayer {
                                                 translationY =
@@ -161,8 +181,8 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                                                 scaleX = 1.03f
                                                 scaleY = 1.03f
                                             }
-                                    } else {
-                                        Modifier.animateItem()
+                                        editable -> Modifier.animateItem()
+                                        else -> Modifier
                                     }
                                 SongRow(
                                     title = song.title,
@@ -171,51 +191,54 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
                                     onClick = { vm.play(displayed, index) },
                                     modifier = rowModifier.onSizeChanged { if (it.height > 0) rowHeightPx = it.height },
                                     trailing = {
-                                        IconButton(onClick = { vm.removeSong(song.id) }) {
-                                            Icon(
-                                                Icons.Filled.RemoveCircleOutline,
-                                                contentDescription = "Remove from playlist",
-                                            )
-                                        }
-                                        // Long-press the handle (not the whole row, which taps to play) to drag.
-                                        Box(
-                                            Modifier
-                                                .size(40.dp)
-                                                .pointerInput(song.id) {
-                                                    detectDragGesturesAfterLongPress(
-                                                        onDragStart = {
-                                                            draggedId = song.id
-                                                            dragFrom = working.indexOfFirst { it.id == song.id }
-                                                            dragTo = dragFrom
-                                                            dragAccumPx = 0f
-                                                        },
-                                                        onDrag = { change, amount ->
-                                                            change.consume()
-                                                            dragAccumPx += amount.y
-                                                            // Stride = row height + the 8dp spacedBy gap, or the
-                                                            // threshold drifts ~8dp/row over a long list.
-                                                            val stride = rowHeightPx + spacingPx
-                                                            if (stride > 0) {
-                                                                dragTo = (dragFrom + (dragAccumPx / stride).roundToInt())
-                                                                    .coerceIn(0, working.lastIndex)
-                                                            }
-                                                        },
-                                                        onDragEnd = {
-                                                            val finalIds = PlaylistReorder.reorder(
-                                                                working.map { it.id }, dragFrom, dragTo,
-                                                            )
-                                                            working = finalIds.mapNotNull { id ->
-                                                                working.firstOrNull { it.id == id }
-                                                            }
-                                                            vm.reorder(finalIds)
-                                                            draggedId = null
-                                                        },
-                                                        onDragCancel = { draggedId = null },
-                                                    )
-                                                },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(Icons.Filled.DragHandle, contentDescription = "Reorder")
+                                        // Edit controls render for manual playlists only; smart rows are play-only.
+                                        if (editable) {
+                                            IconButton(onClick = { vm.removeSong(song.id) }) {
+                                                Icon(
+                                                    Icons.Filled.RemoveCircleOutline,
+                                                    contentDescription = "Remove from playlist",
+                                                )
+                                            }
+                                            // Long-press the handle (not the whole row, which taps to play) to drag.
+                                            Box(
+                                                Modifier
+                                                    .size(40.dp)
+                                                    .pointerInput(song.id) {
+                                                        detectDragGesturesAfterLongPress(
+                                                            onDragStart = {
+                                                                draggedId = song.id
+                                                                dragFrom = working.indexOfFirst { it.id == song.id }
+                                                                dragTo = dragFrom
+                                                                dragAccumPx = 0f
+                                                            },
+                                                            onDrag = { change, amount ->
+                                                                change.consume()
+                                                                dragAccumPx += amount.y
+                                                                // Stride = row height + the 8dp spacedBy gap, or the
+                                                                // threshold drifts ~8dp/row over a long list.
+                                                                val stride = rowHeightPx + spacingPx
+                                                                if (stride > 0) {
+                                                                    dragTo = (dragFrom + (dragAccumPx / stride).roundToInt())
+                                                                        .coerceIn(0, working.lastIndex)
+                                                                }
+                                                            },
+                                                            onDragEnd = {
+                                                                val finalIds = PlaylistReorder.reorder(
+                                                                    working.map { it.id }, dragFrom, dragTo,
+                                                                )
+                                                                working = finalIds.mapNotNull { id ->
+                                                                    working.firstOrNull { it.id == id }
+                                                                }
+                                                                vm.reorder(finalIds)
+                                                                draggedId = null
+                                                            },
+                                                            onDragCancel = { draggedId = null },
+                                                        )
+                                                    },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Icon(Icons.Filled.DragHandle, contentDescription = "Reorder")
+                                            }
                                         }
                                     },
                                 )
@@ -233,6 +256,13 @@ fun PlaylistDetailScreen(playlistId: Long, onBack: () -> Unit, modifier: Modifie
             current = current,
             onConfirm = { name -> vm.rename(name); renaming = false },
             onDismiss = { renaming = false },
+        )
+    }
+
+    if (editingCover) {
+        EditCoverDialog(
+            onConfirm = { coverUrl -> vm.setCover(coverUrl); editingCover = false },
+            onDismiss = { editingCover = false },
         )
     }
 
@@ -304,6 +334,48 @@ private fun RenameDialog(current: String, onConfirm: (String) -> Unit, onDismiss
         },
         confirmButton = {
             TextButton(enabled = text.isNotBlank(), onClick = { onConfirm(text) }) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Custom playlist cover. Same paste-a-YouTube-link → thumbnail flow as the song-artwork editor
+ * (consistent UX, and the ytimg CDN renders even when the emulator's DNS is flaky). The cover is
+ * stored as that thumbnail URL; "Reset cover" (in the overflow) clears it back to the first-song art.
+ */
+@Composable
+private fun EditCoverDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    val videoId = YouTubeUrl.extractVideoId(url)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit cover") },
+        text = {
+            Column {
+                Text("Paste a YouTube link — the cover becomes that video's thumbnail.")
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    singleLine = true,
+                    isError = url.isNotBlank() && videoId == null,
+                    placeholder = { Text("https://youtu.be/…") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (videoId != null) {
+                    Spacer(Modifier.height(8.dp))
+                    SongArtwork("https://i.ytimg.com/vi/$videoId/hqdefault.jpg", size = 96.dp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = videoId != null,
+                onClick = { onConfirm("https://i.ytimg.com/vi/$videoId/hqdefault.jpg") },
+            ) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

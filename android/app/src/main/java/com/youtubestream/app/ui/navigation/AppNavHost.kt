@@ -51,6 +51,8 @@ import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
 import com.youtubestream.app.ui.playlist.PlaylistDetailScreen
+import com.youtubestream.app.ui.playlist.PlaylistSource
+import com.youtubestream.app.ui.playlist.SmartKind
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -176,7 +178,18 @@ fun AppNavHost(
                     arguments = listOf(navArgument("id") { type = NavType.LongType }),
                 ) { entry ->
                     PlaylistDetailScreen(
-                        playlistId = entry.arguments?.getLong("id") ?: 0L,
+                        source = PlaylistSource.Manual(entry.arguments?.getLong("id") ?: 0L),
+                        onBack = { nav.popBackStack() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                composable(
+                    "smart/{key}",
+                    arguments = listOf(navArgument("key") { type = NavType.StringType; defaultValue = "" }),
+                ) { entry ->
+                    // SmartKind.fromKey defaults unknown/garbage keys to RECENTLY_PLAYED (no crash on a bad deep link).
+                    PlaylistDetailScreen(
+                        source = PlaylistSource.Smart(SmartKind.fromKey(entry.arguments?.getString("key"))),
                         onBack = { nav.popBackStack() },
                         modifier = Modifier.fillMaxSize(),
                     )
