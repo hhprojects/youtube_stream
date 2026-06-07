@@ -161,7 +161,7 @@ fun AppNavHost(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                composable(Dest.Search.route) { SearchScreen(Modifier.fillMaxSize()) }
+                composable(Dest.Search.route) { SearchScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Library.route) {
                     LibraryHomeScreen(
