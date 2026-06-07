@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.YoutubeStream" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Pure-Compose app: the only thing this platform theme contributes visually is the window
+         background drawn before Compose's first frame. We point it at a DayNight @color so a dark
+         device gets a dark cold-start frame (no white flash). System bar icon colors are handled
+         at runtime by enableEdgeToEdge(); all in-app color comes from MaterialTheme.colorScheme. -->
+    <style name="Theme.YoutubeStream" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
 </resources>
