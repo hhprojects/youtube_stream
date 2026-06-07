@@ -54,3 +54,16 @@ data class PodcastDownloadResponseDto(
     val downloadUrl: String,
     val size: Long,
 )
+
+@Serializable
+data class ShowIdsDto(val showIds: List<String>)
+
+@Serializable
+data class LatestShowDto(
+    val showId: String,
+    val title: String? = null,
+    val episodes: List<PodcastEpisodeDto> = emptyList(),   // newest-first
+)
+
+@Serializable
+data class PodcastLatestResponseDto(val shows: List<LatestShowDto> = emptyList())

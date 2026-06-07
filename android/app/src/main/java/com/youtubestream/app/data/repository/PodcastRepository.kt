@@ -10,10 +10,13 @@ import com.youtubestream.app.data.model.PodcastShowDetail
 import com.youtubestream.app.data.model.parsePodcastDuration
 import com.youtubestream.app.data.remote.PodcastApi
 import com.youtubestream.app.data.remote.dto.PodcastDownloadRequestDto
+import com.youtubestream.app.data.remote.dto.ShowIdsDto
+import com.youtubestream.app.ui.podcast.LatestEpisode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.OkHttpClient
@@ -39,6 +42,9 @@ interface PodcastSource {
     suspend fun markFinished(id: String)
     suspend fun isEpisode(mediaId: String): Boolean
     suspend fun getEpisode(id: String): PodcastEpisode?
+    fun observeContinueListening(): Flow<List<PodcastEpisode>>
+    suspend fun followedShowIds(): List<String>
+    suspend fun latestFromShows(showIds: List<String>): List<LatestEpisode>
 }
 
 /**
@@ -144,6 +150,30 @@ class PodcastRepository(
     override suspend fun markFinished(id: String) = dao.markFinished(id)
     override suspend fun isEpisode(mediaId: String): Boolean = dao.episodeExists(mediaId)
     override suspend fun getEpisode(id: String): PodcastEpisode? = dao.getEpisode(id)
+
+    override fun observeContinueListening(): Flow<List<PodcastEpisode>> = dao.observeContinueListening()
+
+    override suspend fun followedShowIds(): List<String> =
+        dao.observeFollowedShows().first().map { it.showId }
+
+    override suspend fun latestFromShows(showIds: List<String>): List<LatestEpisode> {
+        if (showIds.isEmpty()) return emptyList()
+        return api.latestForShows(ShowIdsDto(showIds)).shows.mapNotNull { s ->
+            val top = s.episodes.firstOrNull() ?: return@mapNotNull null   // newest-first → [0]
+            LatestEpisode(
+                showId = s.showId,
+                showName = s.title ?: "",
+                episode = PodcastEpisodeItem(
+                    videoId = top.videoId,
+                    title = top.title,
+                    durationSeconds = parsePodcastDuration(top.duration),
+                    publishedDate = top.date,
+                    description = top.description,
+                    artworkUrl = top.thumbnail,
+                ),
+            )
+        }
+    }
 
     // Same idiom as DownloadRepository: absolute URLs pass through; the fileClient's BaseUrlInterceptor
     // rewrites host/port to the configured Pi. Relative URLs are prefixed with the base URL.

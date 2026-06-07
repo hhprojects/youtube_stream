@@ -3,7 +3,9 @@ package com.youtubestream.app.data.remote
 import com.youtubestream.app.data.remote.dto.PodcastDownloadRequestDto
 import com.youtubestream.app.data.remote.dto.PodcastDownloadResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastHomeDto
+import com.youtubestream.app.data.remote.dto.PodcastLatestResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastShowDetailDto
+import com.youtubestream.app.data.remote.dto.ShowIdsDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -19,4 +21,7 @@ interface PodcastApi {
 
     @POST("api/podcasts/download")
     suspend fun download(@Body body: PodcastDownloadRequestDto): PodcastDownloadResponseDto
+
+    @POST("api/podcasts/shows/latest")
+    suspend fun latestForShows(@Body body: ShowIdsDto): PodcastLatestResponseDto
 }
