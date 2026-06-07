@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -47,6 +48,8 @@ import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
 import com.youtubestream.app.ui.search.SearchScreen
 import com.youtubestream.app.ui.settings.SettingsScreen
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
@@ -71,8 +74,15 @@ fun AppNavHost(
     val sheet = rememberPlayerSheetState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val peekHeightPx = with(density) { 62.dp.roundToPx() }   // art 44 + 16 vpad + 2dp line
+    val peekHeight = 62.dp                                   // art 44 + 16 vpad + 2dp line
+    val peekHeightPx = with(density) { peekHeight.roundToPx() }
     var navBarHeightPx by remember { mutableIntStateOf(with(density) { 80.dp.roundToPx() }) }
+
+    // The docked mini-bar shows when a track is loaded. Reserve bottom space for it so it doesn't
+    // float over page content (e.g. the Import "Download" button). Recomposes only when this flips.
+    val miniBarVisible by remember(connection) {
+        connection.state.map { it.isConnected && it.currentMediaId != null }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = false)
 
     // Surface playback errors app-wide (this Scaffold is always composed), regardless of the open tab.
     val context = LocalContext.current
@@ -134,7 +144,7 @@ fun AppNavHost(
                 }
             },
         ) { padding ->
-            NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding)) {
+            NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding).padding(bottom = if (miniBarVisible) peekHeight else 0.dp)) {
                 composable(Dest.Home.route) { HomeScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Search.route) { SearchScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
