@@ -77,3 +77,16 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         db.execSQL("DELETE FROM playlist_songs WHERE songId NOT IN (SELECT id FROM library_songs)")
     }
 }
+
+/**
+ * v6 → v7: additive. Creates recent_searches without touching any existing table, so installs keep
+ * their library/history/playlists. SQL copied verbatim from schemas/.../7.json (Room-generated).
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `recent_searches` " +
+                "(`query` TEXT NOT NULL, `usedAt` INTEGER NOT NULL, PRIMARY KEY(`query`))",
+        )
+    }
+}
