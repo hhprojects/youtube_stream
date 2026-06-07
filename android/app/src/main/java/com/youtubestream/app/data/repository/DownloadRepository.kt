@@ -43,7 +43,7 @@ class DownloadRepository(
             target = File(songsDir.apply { mkdirs() }, meta.filename)
             streamTo(absoluteUrl(meta.downloadUrl), target, meta.size)
             val song = LibrarySong(
-                id = videoId,
+                id = meta.filename,        // canonical id = filename (was videoId)
                 title = meta.title,
                 artist = meta.artist,
                 durationSeconds = 0,
@@ -52,6 +52,7 @@ class DownloadRepository(
                 size = meta.size,
                 dateAdded = System.currentTimeMillis(),
                 artworkUrl = artworkUrl,
+                videoId = videoId,         // keep the YouTube id for Search-match / RelatedSeed / artwork
             )
             dao.insert(song)
             emit(DownloadState.Completed(song))
@@ -70,7 +71,7 @@ class DownloadRepository(
         try {
             streamTo(absoluteUrl(song.downloadUrl), target, song.size)
             val row = LibrarySong(
-                id = song.id,
+                id = song.filename,        // canonical id = filename (was song.id)
                 title = song.title,
                 artist = song.artist,
                 durationSeconds = 0,
@@ -79,6 +80,7 @@ class DownloadRepository(
                 size = song.size,
                 dateAdded = System.currentTimeMillis(),
                 artworkUrl = song.thumbnailUrl,   // correct art from the Pi sidecar (null → placeholder)
+                videoId = null,            // Slice 2 fills this from the Pi sidecar
             )
             dao.insert(row)
             emit(DownloadState.Completed(row))
