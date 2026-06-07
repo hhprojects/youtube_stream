@@ -50,3 +50,30 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         )
     }
 }
+
+/**
+ * v5 → v6: make `filename` the canonical id. Adds the `videoId` column, captures each downloaded
+ * row's old id (= its videoId) into it, re-keys the logical-join children (playlist_songs, play_events)
+ * from old-id → filename, then flips library_songs.id to the filename. This HEALS rows orphaned by the
+ * old id-flip bug. Steps run while id still holds the old value, then flip last. OR IGNORE on the
+ * playlist re-key avoids the (playlistId, filename) PK collision from import→download→re-add; the final
+ * DELETE purges the skipped duplicates and any pre-existing orphans.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE library_songs ADD COLUMN videoId TEXT")
+        db.execSQL("UPDATE library_songs SET videoId = id WHERE id <> filename")
+        db.execSQL(
+            "UPDATE OR IGNORE playlist_songs SET songId = " +
+                "(SELECT filename FROM library_songs WHERE library_songs.id = playlist_songs.songId) " +
+                "WHERE songId IN (SELECT id FROM library_songs WHERE id <> filename)",
+        )
+        db.execSQL(
+            "UPDATE play_events SET songId = " +
+                "(SELECT filename FROM library_songs WHERE library_songs.id = play_events.songId) " +
+                "WHERE songId IN (SELECT id FROM library_songs WHERE id <> filename)",
+        )
+        db.execSQL("UPDATE library_songs SET id = filename WHERE id <> filename")
+        db.execSQL("DELETE FROM playlist_songs WHERE songId NOT IN (SELECT id FROM library_songs)")
+    }
+}
