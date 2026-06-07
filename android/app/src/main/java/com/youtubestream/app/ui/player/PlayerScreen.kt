@@ -79,7 +79,9 @@ fun PlayerScreen(
     var expanded by remember { mutableStateOf(false) }
     val upNext = state.queue.drop(state.currentIndex + 1)
 
-    Box(modifier.fillMaxSize()) {
+    // Solid base so the sheet is never see-through: songs without artwork show this surface; songs with
+    // art show the blurred backdrop (opaque) on top of it.
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         // Immersive backdrop: the current art, blown up + blurred, tinted by a scrim for legibility.
         ArtBackdrop(state.artworkUri)
 
