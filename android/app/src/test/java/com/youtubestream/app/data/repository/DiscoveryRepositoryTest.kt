@@ -72,4 +72,29 @@ class DiscoveryRepositoryTest {
         assertEquals("m1", detail.songs[0].videoId)
         server.shutdown()
     }
+
+    @Test
+    fun genreChartsMapsAndCleansTitle() = runTest {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse().setBody(
+            """{"charts":[{"key":"PL1","title":"Top 50 Pop Music Videos United States"}]}"""))
+        val repo = DiscoveryRepository(apiFor(server))
+        val charts = repo.genreCharts("US")
+        assertEquals(1, charts.size)
+        assertEquals("PL1", charts[0].key)
+        assertEquals("Pop", charts[0].title)   // cleaned
+        server.shutdown()
+    }
+
+    @Test
+    fun playlistSongsMapsTitleAndSongs() = runTest {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse().setBody(
+            """{"title":"Top 50 Pop Music Videos United States","songs":[{"id":"v1","title":"S","artist":"A"}]}"""))
+        val repo = DiscoveryRepository(apiFor(server))
+        val detail = repo.playlistSongs("PL1")
+        assertEquals(1, detail.songs.size)
+        assertEquals("v1", detail.songs[0].videoId)
+        server.shutdown()
+    }
 }

@@ -39,6 +39,8 @@ class DiscoverViewModelTest {
         override suspend fun related(seedVideoId: String) = onRelated(seedVideoId)
         override suspend fun moods() = onMoods()
         override suspend fun moodSongs(key: String) = MoodDetail("", emptyList())
+        override suspend fun genreCharts(region: String) = emptyList<com.youtubestream.app.data.model.GenreChart>()
+        override suspend fun playlistSongs(playlistId: String) = MoodDetail("", emptyList())
     }
 
     private class FakeReach(initial: ServerStatus) : ReachabilitySource {

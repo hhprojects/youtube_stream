@@ -1,6 +1,7 @@
 package com.youtubestream.app.data.remote
 
 import com.youtubestream.app.data.remote.dto.DiscoveryShelfDto
+import com.youtubestream.app.data.remote.dto.GenreChartsResponseDto
 import com.youtubestream.app.data.remote.dto.MoodDetailDto
 import com.youtubestream.app.data.remote.dto.MoodsResponseDto
 import retrofit2.http.GET
@@ -19,4 +20,10 @@ interface DiscoveryApi {
 
     @GET("api/discovery/mood")
     suspend fun mood(@Query("params") params: String): MoodDetailDto
+
+    @GET("api/discovery/genre-charts")
+    suspend fun genreCharts(@Query("region") region: String): GenreChartsResponseDto
+
+    @GET("api/discovery/playlist")
+    suspend fun playlist(@Query("id") id: String): MoodDetailDto
 }
