@@ -105,19 +105,51 @@ function sidecarPathFor(dir, audioFile) {
   return path.join(dir, audioFile.replace(/\.(m4a|mp3)$/i, '.json'));
 }
 
-function readVideoId(dir, audioFile) {
+function readSidecar(dir, audioFile) {
   try {
     const p = sidecarPathFor(dir, audioFile);
     if (!fs.existsSync(p)) return null;
-    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-    return typeof data.videoId === 'string' ? data.videoId : null;
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
   } catch {
     return null;
   }
 }
 
+function writeSidecar(dir, audioFile, data) {
+  fs.writeFileSync(sidecarPathFor(dir, audioFile), JSON.stringify(data));
+}
+
+// Back-compat thin wrappers (existing callers/tests).
+function readVideoId(dir, audioFile) {
+  const sc = readSidecar(dir, audioFile);
+  return sc && typeof sc.videoId === 'string' ? sc.videoId : null;
+}
+
 function writeVideoId(dir, audioFile, videoId) {
-  fs.writeFileSync(sidecarPathFor(dir, audioFile), JSON.stringify({ videoId }));
+  // Merge, don't clobber: the artwork endpoint sets only videoId and must keep any title/artist.
+  writeSidecar(dir, audioFile, { ...(readSidecar(dir, audioFile) || {}), videoId });
+}
+
+// One /api/library row. Prefer the sidecar's title/artist/videoId (written at download time, when the
+// real " - " separator still exists) over re-deriving from the underscored filename (which can't be
+// split → "Unknown"). Forward-only: files downloaded before sidecars carried title/artist still fall back.
+function libraryRowFor(dir, file) {
+  const stats = fs.statSync(path.join(dir, file));
+  const sc = readSidecar(dir, file);
+  const rawTitle = file.replace(/\.(m4a|mp3)$/, '').replace(/_/g, ' ');
+  const parsed = parseArtistTitle(rawTitle);
+  return {
+    id: file,
+    title: sc && typeof sc.title === 'string' ? sc.title : parsed.title,
+    artist: sc && typeof sc.artist === 'string' ? sc.artist : parsed.artist,
+    duration: 'Unknown',
+    filename: file,
+    downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(file)}`,
+    size: stats.size,
+    dateAdded: stats.mtime,
+    thumbnail: thumbnailUrl(sc && typeof sc.videoId === 'string' ? sc.videoId : null),
+    videoId: sc && typeof sc.videoId === 'string' ? sc.videoId : null,
+  };
 }
 
 app.post('/api/search', (req, res) => {
@@ -178,8 +210,10 @@ app.post('/api/download', (req, res) => {
     }
     try {
       const stats = fs.statSync(outputPath);
-      try { writeVideoId(DOWNLOAD_DIR, `${safeTitle}.m4a`, videoId); } catch {}  // best-effort: a sidecar miss must not fail a good download
-      const parsed = parseArtistTitle(title || safeTitle);
+      const parsed = parseArtistTitle(title || safeTitle);   // from the ORIGINAL title (still has " - ")
+      // best-effort (a sidecar miss must not fail a good download): store the real title/artist so
+      // /api/library doesn't re-derive them from the separator-less filename and land on "Unknown".
+      try { writeSidecar(DOWNLOAD_DIR, `${safeTitle}.m4a`, { videoId, title: parsed.title, artist: parsed.artist }); } catch {}
       res.json({
         success: true,
         filename: `${safeTitle}.m4a`,
@@ -199,23 +233,7 @@ app.get('/api/library', (req, res) => {
   try {
     const files = fs.readdirSync(DOWNLOAD_DIR)
       .filter((file) => file.endsWith('.m4a') || file.endsWith('.mp3'))
-      .map((file) => {
-        const filePath = path.join(DOWNLOAD_DIR, file);
-        const stats = fs.statSync(filePath);
-        const rawTitle = file.replace(/\.(m4a|mp3)$/, '').replace(/_/g, ' ');
-        const parsed = parseArtistTitle(rawTitle);
-        return {
-          id: file,
-          title: parsed.title,
-          artist: parsed.artist,
-          duration: 'Unknown',
-          filename: file,
-          downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(file)}`,
-          size: stats.size,
-          dateAdded: stats.mtime,
-          thumbnail: thumbnailUrl(readVideoId(DOWNLOAD_DIR, file)),
-        };
-      })
+      .map((file) => libraryRowFor(DOWNLOAD_DIR, file))
       .sort((a, b) => b.dateAdded - a.dateAdded);
     res.json({ songs: files });
   } catch {
@@ -305,4 +323,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId };
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor };

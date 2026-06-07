@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId } = require('./server');
+const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor } = require('./server');
 
 test('YOUTUBE_ID_REGEX accepts standard ids', () => {
   assert.ok(YOUTUBE_ID_REGEX.test('dQw4w9WgXcQ'));
@@ -129,6 +129,48 @@ test('pruneDownloads removes a pruned file\'s sidecar too', () => {
     pruneDownloads(tmp, 100);
     assert.ok(!fs.existsSync(path.join(tmp, 'a.m4a')));
     assert.ok(!fs.existsSync(path.join(tmp, 'a.json')));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('writeSidecar / readSidecar round-trip videoId + title + artist', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'art-'));
+  try {
+    writeSidecar(tmp, 'song.m4a', { videoId: 'dQw4w9WgXcQ', title: 'Circles', artist: 'Post Malone' });
+    assert.deepEqual(readSidecar(tmp, 'song.m4a'), { videoId: 'dQw4w9WgXcQ', title: 'Circles', artist: 'Post Malone' });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('writeVideoId merges into an existing sidecar (keeps title/artist)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'art-'));
+  try {
+    writeSidecar(tmp, 'song.m4a', { videoId: 'old', title: 'Circles', artist: 'Post Malone' });
+    writeVideoId(tmp, 'song.m4a', 'new');   // artwork endpoint sets only the videoId
+    assert.deepEqual(readSidecar(tmp, 'song.m4a'), { videoId: 'new', title: 'Circles', artist: 'Post Malone' });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('libraryRowFor prefers sidecar title/artist/videoId, falls back to the filename', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'art-'));
+  try {
+    // With a sidecar: real metadata + videoId surface.
+    fs.writeFileSync(path.join(tmp, 'Post_Malone_Circles.m4a'), Buffer.alloc(10));
+    writeSidecar(tmp, 'Post_Malone_Circles.m4a', { videoId: 'dQw4w9WgXcQ', title: 'Circles', artist: 'Post Malone' });
+    const withSc = libraryRowFor(tmp, 'Post_Malone_Circles.m4a');
+    assert.equal(withSc.title, 'Circles');
+    assert.equal(withSc.artist, 'Post Malone');
+    assert.equal(withSc.videoId, 'dQw4w9WgXcQ');
+
+    // Without a sidecar: falls back to deriving from the (separator-less) filename → artist "Unknown", videoId null.
+    fs.writeFileSync(path.join(tmp, 'Some_Old_File.m4a'), Buffer.alloc(10));
+    const noSc = libraryRowFor(tmp, 'Some_Old_File.m4a');
+    assert.equal(noSc.artist, 'Unknown');
+    assert.equal(noSc.videoId, null);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
