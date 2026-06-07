@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
@@ -44,7 +45,7 @@ import com.youtubestream.app.ui.components.SongRow
 import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
-fun LibraryScreen(modifier: Modifier = Modifier) {
+fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val vm = appViewModel { LibraryViewModel(it.libraryRepository, it.piLibraryRepository, it.playbackConnection) }
     val state by vm.state.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<LibrarySong?>(null) }
@@ -57,7 +58,13 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Back")
+            }
+            Text("All songs", style = MaterialTheme.typography.titleLarge)
+        }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             when (val s = state) {
             is UiState.Idle, is UiState.Loading -> CircularProgressIndicator()
             is UiState.Error -> Text("Error: ${s.message}")
