@@ -1,11 +1,13 @@
 package com.youtubestream.app.ui.search
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +17,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -31,7 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -43,42 +51,66 @@ import com.youtubestream.app.ui.components.ServerStatusBanner
 import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
-fun SearchScreen(modifier: Modifier = Modifier) {
+fun SearchScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val vm = appViewModel { SearchViewModel(it.searchRepository, it.downloadRepository, it.libraryRepository, it.serverReachability, it.recentSearchRepository) }
     val state by vm.state.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val downloaded by vm.downloadedIds.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
+    val recents by vm.recents.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.onEnter() }
+
     var query by remember { mutableStateOf("") }
     var addingTo by remember { mutableStateOf<String?>(null) }   // library song id pending an add-to-playlist
     val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        ServerStatusBanner(status, onRetry = { vm.onEnter() })
+    // The page exists to type a query — open with the field focused and the keyboard up.
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
+
+    fun submit(q: String) {
+        query = q
+        if (status.allowsPiActions) vm.search(q)
+        focusManager.clearFocus()
+    }
+
+    Column(modifier = modifier.fillMaxSize().imePadding().padding(16.dp)) {
+        // The search "bar": the field + an X that returns to Home (the app-shell TopAppBar is hidden here).
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 label = { Text("Search YouTube") },
                 singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = {
-                    if (status.allowsPiActions) vm.search(query)
-                    focusManager.clearFocus()
-                }),
-                modifier = Modifier.weight(1f),
+                keyboardActions = KeyboardActions(onSearch = { submit(query) }),
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
             )
-            Button(
-                onClick = { vm.search(query) },
-                enabled = status.allowsPiActions,
-                modifier = Modifier.padding(start = 8.dp),
-            ) { Text("Go") }
+            IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Close search")
+            }
         }
+
+        ServerStatusBanner(status, onRetry = { vm.onEnter() })
 
         Box(Modifier.fillMaxSize().padding(top = 12.dp), contentAlignment = Alignment.Center) {
             when (val s = state) {
-                is UiState.Idle -> Text("Search for a song to begin.")
+                is UiState.Idle ->
+                    if (recents.isEmpty()) {
+                        Text("Search for a song to begin.")
+                    } else {
+                        RecentSearches(
+                            recents = recents,
+                            onRun = { submit(it) },
+                            onRemove = { vm.removeRecent(it) },
+                            onClear = { vm.clearRecents() },
+                        )
+                    }
                 is UiState.Loading -> CircularProgressIndicator()
                 is UiState.Error -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Error: ${s.message}")
@@ -106,6 +138,38 @@ fun SearchScreen(modifier: Modifier = Modifier) {
 
     addingTo?.let { id ->
         AddToPlaylistSheet(songId = id, onDismiss = { addingTo = null })
+    }
+}
+
+@Composable
+private fun RecentSearches(
+    recents: List<String>,
+    onRun: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Recent", modifier = Modifier.weight(1f))
+                TextButton(onClick = onClear) { Text("Clear all") }
+            }
+        }
+        items(recents, key = { it }) { term ->
+            Row(
+                Modifier.fillMaxWidth().clickable { onRun(term) }.padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.History, contentDescription = null)
+                Text(term, modifier = Modifier.weight(1f).padding(start = 12.dp), maxLines = 1)
+                IconButton(onClick = { onRemove(term) }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Remove")
+                }
+            }
+        }
     }
 }
 
