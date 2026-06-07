@@ -23,7 +23,7 @@ import com.youtubestream.app.ui.discover.discoverSection
 import com.youtubestream.app.ui.library.toPlayableTrack
 
 @Composable
-fun HomeScreen(onOpenMood: (String) -> Unit, modifier: Modifier = Modifier) {
+fun HomeScreen(onOpenMood: (String) -> Unit, onOpenGenre: (String, String) -> Unit, modifier: Modifier = Modifier) {
     val vm = appViewModel { c ->
         HomeViewModel(
             observeLibrary = { c.libraryRepository.observeLibrary() },
@@ -75,6 +75,7 @@ fun HomeScreen(onOpenMood: (String) -> Unit, modifier: Modifier = Modifier) {
                     downloadingKeys = discoverDownloads.keys,
                     onSongClick = discoverVm::onSongClick,
                     onOpenMood = onOpenMood,
+                    onOpenGenre = onOpenGenre,
                 )
             }
         }

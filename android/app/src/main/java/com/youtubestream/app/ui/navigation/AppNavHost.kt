@@ -153,6 +153,9 @@ fun AppNavHost(
                 composable(Dest.Home.route) {
                     HomeScreen(
                         onOpenMood = { key -> nav.navigate("mood?key=" + android.net.Uri.encode(key)) },
+                        onOpenGenre = { id, title ->
+                            nav.navigate("genre?id=" + android.net.Uri.encode(id) + "&title=" + android.net.Uri.encode(title))
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -187,6 +190,22 @@ fun AppNavHost(
                     DiscoveryListScreen(
                         load = { it.moodSongs(key) },
                         fallbackTitle = "Mood",
+                        onBack = { nav.popBackStack() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                composable(
+                    "genre?id={id}&title={title}",
+                    arguments = listOf(
+                        navArgument("id") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                    ),
+                ) { entry ->
+                    val id = entry.arguments?.getString("id").orEmpty()
+                    DiscoveryListScreen(
+                        load = { it.playlistSongs(id) },
+                        fallbackTitle = "Genre",
+                        titleOverride = entry.arguments?.getString("title")?.takeIf { it.isNotBlank() },
                         onBack = { nav.popBackStack() },
                         modifier = Modifier.fillMaxSize(),
                     )
