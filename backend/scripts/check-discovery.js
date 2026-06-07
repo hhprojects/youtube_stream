@@ -64,7 +64,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`OK — all four discovery commands returned the expected shape (region=${REGION}).`);
+  console.log(`OK — all ${Object.keys(captured).length} discovery commands returned the expected shape (region=${REGION}).`);
   if (UPDATE) {
     for (const [name, data] of Object.entries(captured)) {
       fs.writeFileSync(path.join(FIXTURES_DIR, `${name}.json`), JSON.stringify(data) + '\n');
