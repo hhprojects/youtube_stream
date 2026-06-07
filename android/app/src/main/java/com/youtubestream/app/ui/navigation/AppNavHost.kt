@@ -61,10 +61,12 @@ import kotlinx.coroutines.launch
 
 private enum class Dest(val route: String, val label: String, val icon: ImageVector) {
     Home("home", "Home", Icons.Filled.Home),
-    Search("search", "Search", Icons.Filled.Search),
     Library("library", "Library", Icons.Filled.LibraryMusic),
     Settings("settings", "Settings", Icons.Filled.Settings),
 }
+
+/** Search is reachable from Home's app bar, not the tab bar, so it's a plain route — not a [Dest]. */
+private const val SEARCH_ROUTE = "search"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +79,7 @@ fun AppNavHost(
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     val route = current?.destination
+    val onSearch = route?.hierarchy?.any { it.route == SEARCH_ROUTE } == true
 
     val sheet = rememberPlayerSheetState()
     val scope = rememberCoroutineScope()
@@ -118,40 +121,46 @@ fun AppNavHost(
                     TopAppBar(
                         title = { Text(dest.label) },
                         actions = {
-                            if (dest == Dest.Library) {
-                                IconButton(onClick = { nav.navigate("import") }) {
+                            when (dest) {
+                                Dest.Library -> IconButton(onClick = { nav.navigate("import") }) {
                                     Icon(Icons.Filled.CloudDownload, contentDescription = "Import from Pi")
                                 }
+                                Dest.Home -> IconButton(onClick = { nav.navigate(SEARCH_ROUTE) }) {
+                                    Icon(Icons.Filled.Search, contentDescription = "Search")
+                                }
+                                else -> {}
                             }
                         },
                     )
                 }
             },
             bottomBar = {
-                // Slides down off-screen as the sheet expands (progress 0→1).
-                NavigationBar(
-                    Modifier
-                        .onSizeChanged { navBarHeightPx = it.height }
-                        .graphicsLayer { translationY = sheet.progress * navBarHeightPx },
-                ) {
-                    Dest.entries.forEach { dest ->
-                        NavigationBarItem(
-                            selected = route?.hierarchy?.any { it.route == dest.route } == true,
-                            onClick = {
-                                nav.navigate(dest.route) {
-                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(dest.icon, contentDescription = dest.label) },
-                            label = { Text(dest.label) },
-                        )
+                if (!onSearch) {
+                    // Slides down off-screen as the sheet expands (progress 0→1).
+                    NavigationBar(
+                        Modifier
+                            .onSizeChanged { navBarHeightPx = it.height }
+                            .graphicsLayer { translationY = sheet.progress * navBarHeightPx },
+                    ) {
+                        Dest.entries.forEach { dest ->
+                            NavigationBarItem(
+                                selected = route?.hierarchy?.any { it.route == dest.route } == true,
+                                onClick = {
+                                    nav.navigate(dest.route) {
+                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = { Icon(dest.icon, contentDescription = dest.label) },
+                                label = { Text(dest.label) },
+                            )
+                        }
                     }
                 }
             },
         ) { padding ->
-            NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding).padding(bottom = if (miniBarVisible) peekHeight else 0.dp)) {
+            NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding).padding(bottom = if (miniBarVisible && !onSearch) peekHeight else 0.dp)) {
                 composable(Dest.Home.route) {
                     HomeScreen(
                         onOpenMood = { key -> nav.navigate("mood?key=" + android.net.Uri.encode(key)) },
@@ -161,7 +170,7 @@ fun AppNavHost(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                composable(Dest.Search.route) { SearchScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
+                composable(SEARCH_ROUTE) { SearchScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Library.route) {
                     LibraryHomeScreen(
@@ -227,11 +236,13 @@ fun AppNavHost(
             }
         }
 
-        PlayerSheet(
-            connection = connection,
-            sheet = sheet,
-            peekHeightPx = peekHeightPx,
-            navBarHeightPx = navBarHeightPx,
-        )
+        if (!onSearch) {
+            PlayerSheet(
+                connection = connection,
+                sheet = sheet,
+                peekHeightPx = peekHeightPx,
+                navBarHeightPx = navBarHeightPx,
+            )
+        }
     }
 }
