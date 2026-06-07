@@ -13,13 +13,17 @@ def _thumb(item):
 
 
 def _to_song(item):
+    vid = item.get("videoId")
     artists = item.get("artists") or []
     artist = ", ".join(a.get("name", "") for a in artists if a.get("name")) or "Unknown"
+    thumbnail = _thumb(item)
+    if not thumbnail and vid:  # e.g. get_watch_playlist tracks omit thumbnails → derive from the videoId
+        thumbnail = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
     return {
-        "id": item.get("videoId"),
+        "id": vid,
         "title": item.get("title"),
         "artist": artist,
-        "thumbnail": _thumb(item),
+        "thumbnail": thumbnail,
         "duration": item.get("duration"),  # "m:ss" string or None
     }
 
@@ -29,13 +33,15 @@ def _songs_from(items):
 
 
 def cmd_trending(yt, region):
+    # Unauthenticated get_charts returns chart *playlists* (no song items; top "songs" need auth).
+    # videos[0] is the "Trending NN <country>" playlist — resolve it to real tracks.
     charts = yt.get_charts(country=region)
-    # Unauthenticated: top "songs" need auth; use video/trending sections (validate shape in Task 2).
-    items = []
-    for section in ("videos", "trending"):
-        sec = charts.get(section) or {}
-        items += sec.get("items") or []
-    return {"songs": _songs_from(items)}
+    videos = charts.get("videos") or []
+    playlist_id = videos[0].get("playlistId") if videos else None
+    if not playlist_id:
+        return {"songs": []}
+    pl = yt.get_playlist(playlist_id, limit=50)
+    return {"songs": _songs_from(pl.get("tracks") or [])}
 
 
 def cmd_related(yt, video_id):
