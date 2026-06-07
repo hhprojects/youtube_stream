@@ -18,6 +18,9 @@ interface PodcastDao {
     @Query("SELECT EXISTS(SELECT 1 FROM podcast_episodes WHERE id = :id)")
     suspend fun episodeExists(id: String): Boolean
 
+    @Query("SELECT * FROM podcast_episodes WHERE id = :id")
+    suspend fun getEpisode(id: String): PodcastEpisode?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEpisode(episode: PodcastEpisode)
 
