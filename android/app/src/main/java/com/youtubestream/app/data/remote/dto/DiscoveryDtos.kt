@@ -22,3 +22,9 @@ data class MoodsResponseDto(val categories: List<MoodCategoryDto> = emptyList())
 
 @Serializable
 data class MoodDetailDto(val title: String = "", val songs: List<DiscoverySongDto> = emptyList())
+
+@Serializable
+data class GenreChartDto(val key: String, val title: String)
+
+@Serializable
+data class GenreChartsResponseDto(val charts: List<GenreChartDto> = emptyList())

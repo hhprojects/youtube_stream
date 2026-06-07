@@ -13,3 +13,6 @@ data class MoodCategory(val key: String, val title: String, val section: String)
 
 /** The songs of one mood/genre category, for the mood-detail screen. */
 data class MoodDetail(val title: String, val songs: List<DiscoverySong>)
+
+/** A ranked genre chart entry; [key] is the chart's playlistId, [title] is cleaned for display. */
+data class GenreChart(val key: String, val title: String)
