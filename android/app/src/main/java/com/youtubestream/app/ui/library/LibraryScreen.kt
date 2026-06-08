@@ -162,6 +162,6 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     }
 
     addingTo?.let { song ->
-        AddToPlaylistSheet(songId = song.id, onDismiss = { addingTo = null })
+        AddToPlaylistSheet(songIds = listOf(song.id), onDismiss = { addingTo = null })
     }
 }

@@ -137,7 +137,7 @@ fun SearchScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     }
 
     addingTo?.let { id ->
-        AddToPlaylistSheet(songId = id, onDismiss = { addingTo = null })
+        AddToPlaylistSheet(songIds = listOf(id), onDismiss = { addingTo = null })
     }
 }
 

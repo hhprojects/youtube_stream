@@ -120,7 +120,7 @@ fun PlayerScreen(
     }
 
     addingToId?.let { id ->
-        AddToPlaylistSheet(songId = id, onDismiss = { addingToId = null })
+        AddToPlaylistSheet(songIds = listOf(id), onDismiss = { addingToId = null })
     }
 }
 

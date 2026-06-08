@@ -22,16 +22,16 @@ class AddToPlaylistViewModel(
         playlists.observeSummaries()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun add(playlistId: Long, songId: String) {
-        viewModelScope.launch { playlists.addSong(playlistId, songId, now()) }
+    fun add(playlistId: Long, songIds: List<String>) {
+        viewModelScope.launch { playlists.addSongs(playlistId, songIds, now()) }
     }
 
-    fun createAndAdd(name: String, songId: String) {
+    fun createAndAdd(name: String, songIds: List<String>) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
             val id = playlists.create(trimmed, now())
-            playlists.addSong(id, songId, now())
+            playlists.addSongs(id, songIds, now())
         }
     }
 }
