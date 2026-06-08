@@ -7,6 +7,8 @@ import com.youtubestream.app.data.model.PodcastEpisodeItem
 import com.youtubestream.app.data.model.PodcastShelf
 import com.youtubestream.app.data.model.PodcastShowCard
 import com.youtubestream.app.data.model.PodcastShowDetail
+import com.youtubestream.app.data.model.ShowNewEpisodes
+import com.youtubestream.app.data.model.newEpisodesSince
 import com.youtubestream.app.data.model.parsePodcastDuration
 import com.youtubestream.app.data.remote.PodcastApi
 import com.youtubestream.app.data.remote.dto.PodcastDownloadRequestDto
@@ -45,6 +47,10 @@ interface PodcastSource {
     fun observeContinueListening(): Flow<List<PodcastEpisode>>
     suspend fun followedShowIds(): List<String>
     suspend fun latestFromShows(showIds: List<String>): List<LatestEpisode>
+
+    /** Background check: diff each followed show's latest episodes vs its anchor, advance anchors,
+     *  and return the shows that gained new episodes (for the notification). Network call inside. */
+    suspend fun checkForNewEpisodes(): List<ShowNewEpisodes>
 }
 
 /**
@@ -173,6 +179,26 @@ class PodcastRepository(
                 ),
             )
         }
+    }
+
+    override suspend fun checkForNewEpisodes(): List<ShowNewEpisodes> {
+        val followed = dao.observeFollowedShows().first()
+        if (followed.isEmpty()) return emptyList()
+        val byId = followed.associateBy { it.showId }
+        val resp = api.latestForShows(ShowIdsDto(followed.map { it.showId }))
+        val out = mutableListOf<ShowNewEpisodes>()
+        for (s in resp.shows) {
+            val show = byId[s.showId] ?: continue
+            val diff = newEpisodesSince(s.episodes.map { it.videoId }, show.lastSeenEpisodeVideoId)
+            // Advance the anchor whenever it moved (new episodes, first sight, or a reset).
+            if (diff.newAnchor != null && diff.newAnchor != show.lastSeenEpisodeVideoId) {
+                dao.updateLastSeenEpisode(s.showId, diff.newAnchor)
+            }
+            if (diff.newVideoIds.isNotEmpty()) {
+                out += ShowNewEpisodes(showName = show.title, count = diff.newVideoIds.size)
+            }
+        }
+        return out
     }
 
     // Same idiom as DownloadRepository: absolute URLs pass through; the fileClient's BaseUrlInterceptor
