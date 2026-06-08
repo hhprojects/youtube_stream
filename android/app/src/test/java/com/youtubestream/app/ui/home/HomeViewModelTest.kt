@@ -27,7 +27,10 @@ class HomeViewModelTest {
 
     @Test fun emitsForYouShelvesFromLibraryAndHistory() = runTest {
         val library = MutableStateFlow(listOf(song("a"), song("b"), song("c"), song("d")))
-        val history = MutableStateFlow(emptyList<PlayEvent>())
+        // 4 distinct recent plays → a visible "Recently played" shelf (proves history flows through).
+        val history = MutableStateFlow(
+            listOf(PlayEvent(0, "a", 1), PlayEvent(0, "b", 2), PlayEvent(0, "c", 3), PlayEvent(0, "d", 4)),
+        )
         val vm = HomeViewModel(
             observeLibrary = { library },
             observeHistory = { history },
@@ -38,7 +41,7 @@ class HomeViewModelTest {
         runCurrent()
 
         val shelves = (vm.state.value as UiState.Content).data
-        assertEquals(listOf(ShelfId.RECENTLY_ADDED), shelves.map { it.id })  // no history → only Recently added
+        assertEquals(listOf(ShelfId.RECENTLY_PLAYED), shelves.map { it.id })
         assertTrue(shelves.first().songs.isNotEmpty())
     }
 }

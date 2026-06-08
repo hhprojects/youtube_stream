@@ -20,18 +20,10 @@ class ForYouShelfBuilderTest {
     private fun shelf(shelves: List<Shelf>, id: ShelfId) = shelves.firstOrNull { it.id == id }
 
     @Test
-    fun recentlyAdded_sortsByDateAddedDesc_andTakesMax() {
-        val songs = (1..15).map { song("s$it", added = it.toLong()) }
-        val shelves = ForYouShelfBuilder.build(songs, events = emptyList(), now = now)
-        val ra = shelf(shelves, ShelfId.RECENTLY_ADDED)!!
-        assertEquals("s15", ra.songs.first().id)             // newest first
-        assertEquals(12, ra.songs.size)                      // MAX_ITEMS
-    }
-
-    @Test
-    fun coldStart_noEvents_showsOnlyRecentlyAdded() {
+    fun coldStart_noEvents_showsNoShelves() {
+        // Both shelves derive from play history, so a no-history library yields nothing.
         val shelves = ForYouShelfBuilder.build(lib("a", "b", "c", "d"), emptyList(), now)
-        assertEquals(listOf(ShelfId.RECENTLY_ADDED), shelves.map { it.id })
+        assertEquals(emptyList<ShelfId>(), shelves.map { it.id })
     }
 
     @Test
@@ -43,19 +35,6 @@ class ForYouShelfBuilderTest {
         )
         val rp = shelf(ForYouShelfBuilder.build(songs, events, now), ShelfId.RECENTLY_PLAYED)!!
         assertEquals(listOf("a", "d", "c", "b", "e"), rp.songs.map { it.id })  // by max(playedAt) desc, distinct
-    }
-
-    @Test
-    fun mostPlayed_byCountDesc_tieBreakRecency() {
-        val songs = lib("a", "b", "c", "d")
-        val events = listOf(
-            play("a", 1), play("a", 2), play("a", 3),   // 3
-            play("b", 5), play("b", 6),                  // 2, most recent of the 2-counts
-            play("c", 4),                                 // 1
-            play("d", 7),                                 // 1, more recent than c
-        )
-        val mp = shelf(ForYouShelfBuilder.build(songs, events, now), ShelfId.MOST_PLAYED)!!
-        assertEquals(listOf("a", "b", "d", "c"), mp.songs.map { it.id })
     }
 
     @Test
@@ -77,18 +56,6 @@ class ForYouShelfBuilderTest {
         val songs = lib("a")
         val events = List(3) { play("a", now - DAY) }
         assertEquals(null, shelf(ForYouShelfBuilder.build(songs, events, now), ShelfId.ON_REPEAT))
-    }
-
-    @Test
-    fun rediscover_playedBefore_butNotRecently() {
-        val songs = lib("old1", "old2", "old3", "old4", "fresh")
-        val events = buildList {
-            listOf("old1", "old2", "old3", "old4").forEach { add(play(it, now - 60 * DAY)) }  // stale
-            add(play("fresh", now - 1 * DAY))                                                  // recent → excluded
-        }
-        val rd = shelf(ForYouShelfBuilder.build(songs, events, now), ShelfId.REDISCOVER)!!
-        assertTrue(rd.songs.map { it.id }.containsAll(listOf("old1", "old2", "old3", "old4")))
-        assertTrue(rd.songs.none { it.id == "fresh" })
     }
 
     @Test
