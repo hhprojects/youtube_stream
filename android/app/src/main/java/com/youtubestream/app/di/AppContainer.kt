@@ -143,18 +143,26 @@ class AppContainer(context: Context) {
     // MediaController is main-thread-confined, so the connection (and its position loop) runs on Main.
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /** App-scoped: connected once, never released — it lives for the process like the player itself. */
-    val playbackConnection =
-        PlaybackConnection(context, playbackScope, QueueDataStore(context)).also { it.connect() }
+    // Constructed but NOT connected/started — startPlayback() wires them up. A background WorkManager wake
+    // builds AppContainer but only touches podcastRepository, so the media stack never spins up off-UI.
+    val playbackConnection = PlaybackConnection(context, playbackScope, QueueDataStore(context))
+    val widgetUpdater = WidgetUpdater(context, playbackConnection, appScope)
+    val podcastProgressWriter = PodcastProgressWriter(playbackConnection, podcastRepository, playbackScope)
 
-    /** Mirrors playback state onto the home-screen widget. App-scoped; started once, lives for the process. */
-    val widgetUpdater = WidgetUpdater(context, playbackConnection, appScope).also { it.start() }
+    @Volatile private var playbackStarted = false
 
-    /** Persists per-episode resume position. App-scoped; started once, lives for the process. */
-    val podcastProgressWriter =
-        PodcastProgressWriter(playbackConnection, podcastRepository, playbackScope).also { it.start() }
+    /**
+     * Connect the player + start the widget mirror, resume-writer, self-heal/play-history collectors, and
+     * the reachability probe. Idempotent. Called only from UI / widget-command entry points — never from the
+     * background episode check, so an idle-device wake never binds MediaSessionService.
+     */
+    fun startPlayback() {
+        if (playbackStarted) return
+        playbackStarted = true
+        playbackConnection.connect()
+        widgetUpdater.start()
+        podcastProgressWriter.start()
 
-    init {
         // Self-heal: a track that failed to play (missing local file) is pruned from the library.
         // The Pi copy stays, so it reappears in Import for re-download.
         playbackConnection.errors
@@ -167,7 +175,6 @@ class AppContainer(context: Context) {
             .launchIn(playbackScope)
 
         // One probe at startup so the banner/gating reflect the Pi before the user touches anything.
-        // Placed in this (final) init block so every property — including `api` — is initialized first.
         appScope.launch { serverReachability.probe() }
     }
 }

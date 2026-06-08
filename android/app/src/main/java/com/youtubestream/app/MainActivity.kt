@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
         openPlayer.value = consumeOpenPlayer(intent)
 
         val container = (application as App).container
+        container.startPlayback()
 
         setContent {
             YoutubeStreamTheme {
