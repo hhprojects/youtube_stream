@@ -8,13 +8,17 @@ import com.youtubestream.app.data.repository.PlaylistRepository
 import com.youtubestream.app.playback.PlaybackController
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.library.toPlayableTrack
+import com.youtubestream.app.ui.selection.SelectionState
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** Header + ordered songs for one playlist's detail page. */
@@ -43,6 +47,10 @@ class PlaylistDetailViewModel(
     /** Manual playlists can be edited (drag/remove/rename/delete/cover); smart ones are read-only. */
     val isEditable: Boolean = source is PlaylistSource.Manual
 
+    private val _selection = MutableStateFlow(SelectionState())
+    /** Multi-select state (manual playlists only); the screen renders it and drives the toggles. */
+    val selection: StateFlow<SelectionState> = _selection
+
     private val songs: Flow<List<LibrarySong>> = when (source) {
         is PlaylistSource.Manual -> playlists.observeSongs(source.id)
         is PlaylistSource.Smart -> when (source.kind) {
@@ -59,7 +67,13 @@ class PlaylistDetailViewModel(
                 }
             is PlaylistSource.Smart ->
                 songs.map { list -> UiState.Content(PlaylistDetailData(source.kind.title, null, list)) }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)
+        }
+            .onEach { ui ->
+                if (ui is UiState.Content) {
+                    _selection.update { it.prune(ui.data.songs.mapTo(HashSet()) { s -> s.id }) }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)
 
     /** Manual playlists vanish when deleted (→ pop the screen); smart playlists never close. */
     val closed: StateFlow<Boolean> =
@@ -93,6 +107,22 @@ class PlaylistDetailViewModel(
     fun removeSong(songId: String) {
         val id = manualId ?: return
         viewModelScope.launch { playlists.removeSong(id, songId) }
+    }
+
+    fun enterSelection(initialId: String? = null) = _selection.update { it.enter(initialId) }
+    fun exitSelection() { _selection.value = SelectionState() }
+    fun toggle(id: String) = _selection.update { it.toggle(id) }
+    fun toggleSelectAll(allIds: List<String>) = _selection.update { it.toggleSelectAll(allIds) }
+
+    /** Remove the current selection from this (manual) playlist, then exit selection mode. */
+    fun removeSelected() {
+        val id = manualId ?: return
+        val ids = _selection.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            playlists.removeSongs(id, ids)
+            _selection.value = SelectionState()
+        }
     }
 
     /** Persist a drag-reordered order. [orderedSongIds] comes from PlaylistReorder.reorder(...). */

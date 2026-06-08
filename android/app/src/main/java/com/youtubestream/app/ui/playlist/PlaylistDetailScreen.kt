@@ -1,5 +1,6 @@
 package com.youtubestream.app.ui.playlist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MoreVert
@@ -57,6 +59,7 @@ import com.youtubestream.app.playlist.PlaylistReorder
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.PlaylistCover
+import com.youtubestream.app.ui.components.SelectionTopBar
 import com.youtubestream.app.ui.components.SongArtwork
 import com.youtubestream.app.ui.components.SongRow
 import kotlin.math.roundToInt
@@ -68,13 +71,17 @@ fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: M
     }
     val editable = vm.isEditable
     val state by vm.state.collectAsStateWithLifecycle()
+    val selection by vm.selection.collectAsStateWithLifecycle()
     val closed by vm.closed.collectAsStateWithLifecycle()
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var editingCover by remember { mutableStateOf(false) }
+    var bulkRemoving by remember { mutableStateOf(false) }
+    var bulkAdding by remember { mutableStateOf(false) }
 
     // The playlist was deleted (here or elsewhere) → leave the detail page. (Smart sources never close.)
     LaunchedEffect(closed) { if (closed) onBack() }
+    BackHandler(enabled = selection.active) { vm.exitSelection() }
 
     val content = state as? UiState.Content
 
@@ -99,37 +106,57 @@ fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: M
             .mapNotNull { id -> working.firstOrNull { it.id == id } }
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Back")
+        if (selection.active) {
+            val ids = (content?.data?.songs).orEmpty().map { it.id }
+            SelectionTopBar(
+                count = selection.count,
+                allSelected = selection.isAllSelected(ids),
+                onClose = { vm.exitSelection() },
+                onToggleSelectAll = { vm.toggleSelectAll(ids) },
+            ) {
+                IconButton(enabled = selection.count > 0, onClick = { bulkRemoving = true }) {
+                    Icon(Icons.Filled.RemoveCircleOutline, contentDescription = "Remove from playlist")
+                }
+                IconButton(enabled = selection.count > 0, onClick = { bulkAdding = true }) {
+                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to another playlist")
+                }
             }
-            Text(
-                content?.data?.name ?: "Playlist",
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            // Overflow (rename / cover / delete) is for manual playlists only — smart ones are read-only.
-            if (editable && content != null) {
-                Box {
-                    var menu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "More")
-                    }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                        DropdownMenuItem(text = { Text("Edit cover") }, onClick = { menu = false; editingCover = true })
-                        if (content.data.coverArtUrl != null) {
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Back")
+                }
+                Text(
+                    content?.data?.name ?: "Playlist",
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (editable && content != null && content.data.songs.isNotEmpty()) {
+                    TextButton(onClick = { vm.enterSelection() }) { Text("Select") }
+                }
+                // Overflow (rename / cover / delete) is for manual playlists only — smart ones are read-only.
+                if (editable && content != null) {
+                    Box {
+                        var menu by remember { mutableStateOf(false) }
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
+                            DropdownMenuItem(text = { Text("Edit cover") }, onClick = { menu = false; editingCover = true })
+                            if (content.data.coverArtUrl != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Reset cover") },
+                                    onClick = { menu = false; vm.setCover(null) },
+                                )
+                            }
                             DropdownMenuItem(
-                                text = { Text("Reset cover") },
-                                onClick = { menu = false; vm.setCover(null) },
+                                text = { Text("Delete playlist") },
+                                onClick = { menu = false; confirmDelete = true },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text("Delete playlist") },
-                            onClick = { menu = false; confirmDelete = true },
-                        )
                     }
                 }
             }
@@ -188,7 +215,11 @@ fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: M
                                     title = song.title,
                                     artist = song.artist,
                                     artworkUrl = song.artworkUrl,
-                                    onClick = { vm.play(displayed, index) },
+                                    inSelectionMode = selection.active,
+                                    selected = song.id in selection.selectedIds,
+                                    onClick = {
+                                        if (selection.active) vm.toggle(song.id) else vm.play(displayed, index)
+                                    },
                                     modifier = rowModifier.onSizeChanged { if (it.height > 0) rowHeightPx = it.height },
                                     trailing = {
                                         // Edit controls render for manual playlists only; smart rows are play-only.
@@ -280,6 +311,27 @@ fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: M
                 TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
             },
         )
+    }
+
+    if (bulkRemoving) {
+        AlertDialog(
+            onDismissRequest = { bulkRemoving = false },
+            title = { Text(if (selection.count == 1) "Remove 1 song from this playlist?" else "Remove ${selection.count} songs from this playlist?") },
+            text = { Text("The songs stay in your library — they're only removed from this playlist.") },
+            confirmButton = {
+                TextButton(onClick = { vm.removeSelected(); bulkRemoving = false }) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { bulkRemoving = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // AddToPlaylistSheet is in this package — no import needed. Selection is retained after add; ✕ exits.
+    if (bulkAdding) {
+        AddToPlaylistSheet(songIds = selection.selectedIds.toList(), onDismiss = { bulkAdding = false })
     }
 }
 
