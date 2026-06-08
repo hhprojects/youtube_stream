@@ -1,6 +1,7 @@
 package com.youtubestream.app.ui.library
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,10 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -27,11 +28,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +41,7 @@ import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.util.YouTubeUrl
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
+import com.youtubestream.app.ui.components.SelectionTopBar
 import com.youtubestream.app.ui.components.SongArtwork
 import com.youtubestream.app.ui.components.SongRow
 import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
@@ -48,55 +50,87 @@ import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val vm = appViewModel { LibraryViewModel(it.libraryRepository, it.piLibraryRepository, it.playbackConnection) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val selection by vm.selection.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<LibrarySong?>(null) }
     var editing by remember { mutableStateOf<LibrarySong?>(null) }
     var addingTo by remember { mutableStateOf<LibrarySong?>(null) }
+    var bulkAdding by remember { mutableStateOf(false) }
+    var bulkDeleting by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         vm.errors.collect { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
     }
 
+    // While selecting, Back exits the mode instead of leaving the screen.
+    BackHandler(enabled = selection.active) { vm.exitSelection() }
+
+    val songs = (state as? UiState.Content)?.data.orEmpty()
+
     Column(modifier.fillMaxSize().padding(16.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Back")
+        if (selection.active) {
+            SelectionTopBar(
+                count = selection.count,
+                allSelected = selection.isAllSelected(songs.map { it.id }),
+                onClose = { vm.exitSelection() },
+                onToggleSelectAll = { vm.toggleSelectAll(songs.map { it.id }) },
+            ) {
+                IconButton(enabled = selection.count > 0, onClick = { bulkAdding = true }) {
+                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
+                }
+                IconButton(enabled = selection.count > 0, onClick = { bulkDeleting = true }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                }
             }
-            Text("All songs", style = MaterialTheme.typography.titleLarge)
-        }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            when (val s = state) {
-            is UiState.Idle, is UiState.Loading -> CircularProgressIndicator()
-            is UiState.Error -> Text("Error: ${s.message}")
-            is UiState.Content -> if (s.data.isEmpty()) {
-                Text("No downloads yet. Search for a song and tap Download.")
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    itemsIndexed(s.data, key = { _, song -> song.id }) { index, song ->
-                        SongRow(
-                            title = song.title,
-                            artist = song.artist,
-                            artworkUrl = song.artworkUrl,
-                            onClick = { vm.play(s.data, index) },
-                            trailing = {
-                                IconButton(onClick = { addingTo = song }) {
-                                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
-                                }
-                                IconButton(onClick = { editing = song }) {
-                                    Icon(Icons.Filled.Edit, contentDescription = "Edit artwork")
-                                }
-                                IconButton(onClick = { pendingDelete = song }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
-                                }
-                            },
-                        )
-                    }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBackIosNew, contentDescription = "Back")
+                }
+                Text("All songs", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                if (songs.isNotEmpty()) {
+                    TextButton(onClick = { vm.enterSelection() }) { Text("Select") }
                 }
             }
         }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            when (val s = state) {
+                is UiState.Idle, is UiState.Loading -> CircularProgressIndicator()
+                is UiState.Error -> Text("Error: ${s.message}")
+                is UiState.Content -> if (s.data.isEmpty()) {
+                    Text("No downloads yet. Search for a song and tap Download.")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        itemsIndexed(s.data, key = { _, song -> song.id }) { index, song ->
+                            SongRow(
+                                title = song.title,
+                                artist = song.artist,
+                                artworkUrl = song.artworkUrl,
+                                inSelectionMode = selection.active,
+                                selected = song.id in selection.selectedIds,
+                                onClick = {
+                                    if (selection.active) vm.toggle(song.id) else vm.play(s.data, index)
+                                },
+                                onLongClick = { vm.enterSelection(song.id) },
+                                trailing = {
+                                    IconButton(onClick = { addingTo = song }) {
+                                        Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
+                                    }
+                                    IconButton(onClick = { editing = song }) {
+                                        Icon(Icons.Filled.Edit, contentDescription = "Edit artwork")
+                                    }
+                                    IconButton(onClick = { pendingDelete = song }) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -163,5 +197,37 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
     addingTo?.let { song ->
         AddToPlaylistSheet(songIds = listOf(song.id), onDismiss = { addingTo = null })
+    }
+
+    if (bulkDeleting) {
+        val targetCount = songs.count { it.id in selection.selectedIds }
+        AlertDialog(
+            onDismissRequest = { bulkDeleting = false },
+            title = { Text("Delete $targetCount songs?") },
+            text = {
+                Text(
+                    "\"Delete downloads\" frees space on this device only — the Pi keeps the files for re-import. " +
+                        "\"Delete everywhere\" also removes them from the Pi, for every device.",
+                )
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { vm.deleteSelectedDownloads(songs); bulkDeleting = false }) {
+                        Text("Delete downloads")
+                    }
+                    TextButton(onClick = { vm.deleteSelectedEverywhere(songs); bulkDeleting = false }) {
+                        Text("Delete everywhere", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { bulkDeleting = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // Selection is retained after a bulk add (so the same set can go to several playlists); ✕ exits.
+    if (bulkAdding) {
+        AddToPlaylistSheet(songIds = selection.selectedIds.toList(), onDismiss = { bulkAdding = false })
     }
 }

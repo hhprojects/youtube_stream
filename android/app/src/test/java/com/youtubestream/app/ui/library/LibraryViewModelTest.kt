@@ -27,6 +27,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -128,6 +129,70 @@ class LibraryViewModelTest {
         runCurrent()
         assertEquals(listOf("a", "b"), dao.songs.value.map { it.id })  // local UNTOUCHED — Pi failed first
         assertEquals(1, errors.size)                                   // a user-facing error was emitted
+    }
+
+    @Test fun toggleSelectAllSelectsThenClears() = runTest {
+        val vm = LibraryViewModel(LibraryRepository(FakeDao(listOf(song("a"), song("b")))), piRepo(), FakeController())
+        val ids = listOf("a", "b")
+        vm.enterSelection()
+        vm.toggleSelectAll(ids)
+        assertEquals(setOf("a", "b"), vm.selection.value.selectedIds)
+        vm.toggleSelectAll(ids)
+        assertEquals(emptySet<String>(), vm.selection.value.selectedIds)
+    }
+
+    @Test fun selectionPrunesWhenSongDisappears() = runTest {
+        val dao = FakeDao(listOf(song("a"), song("b")))
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), piRepo(), FakeController())
+        backgroundScope.launch { vm.state.collect {} }   // activate state → enables the prune side-effect
+        vm.enterSelection("a"); vm.toggle("b")
+        runCurrent()
+        assertEquals(setOf("a", "b"), vm.selection.value.selectedIds)
+        dao.songs.update { l -> l.filterNot { it.id == "b" } }   // b deleted elsewhere
+        runCurrent()
+        assertEquals(setOf("a"), vm.selection.value.selectedIds)  // b pruned out of the count
+    }
+
+    @Test fun deleteSelectedDownloadsRemovesLocalOnlyAndExits() = runTest {
+        val deleted = mutableListOf<String>()
+        val dao = FakeDao(listOf(song("a"), song("b")))
+        val pi = piRepo(onDelete = { deleted += it; DeleteResponseDto(true) })   // must NOT be called
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        vm.enterSelection("a")
+        vm.deleteSelectedDownloads(listOf(song("a"), song("b")))
+        runCurrent()
+        assertEquals(emptyList<String>(), deleted)                  // Pi untouched
+        assertEquals(listOf("b"), dao.songs.value.map { it.id })    // a removed locally
+        assertFalse(vm.selection.value.active)                      // exited after a destructive action
+    }
+
+    @Test fun deleteSelectedEverywhereRemovesSelectedFromPiAndLocal() = runTest {
+        val deleted = mutableListOf<String>()
+        val dao = FakeDao(listOf(song("a"), song("b"), song("c")))
+        val pi = piRepo(onDelete = { deleted += it; DeleteResponseDto(true) })
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        vm.enterSelection("a"); vm.toggle("b")
+        vm.deleteSelectedEverywhere(listOf(song("a"), song("b"), song("c")))
+        runCurrent()
+        assertEquals(setOf("a.m4a", "b.m4a"), deleted.toSet())      // only the selected, by filename
+        assertEquals(listOf("c"), dao.songs.value.map { it.id })    // a,b gone locally; c stays
+    }
+
+    @Test fun deleteSelectedEverywhereReportsPartialFailure() = runTest {
+        val dao = FakeDao(listOf(song("a"), song("b")))
+        val pi = piRepo(onDelete = { filename ->
+            if (filename == "b.m4a") throw RuntimeException("Pi offline")
+            DeleteResponseDto(true)
+        })
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
+        vm.enterSelection("a"); vm.toggle("b")
+        vm.deleteSelectedEverywhere(listOf(song("a"), song("b")))
+        runCurrent()
+        assertEquals(listOf("b"), dao.songs.value.map { it.id })    // a removed (Pi ok), b kept (Pi failed)
+        assertEquals(1, errors.size)                                // partial-failure summary emitted
     }
 
     @Test fun editArtworkRejectsNonYoutubeUrl() = runTest {
