@@ -114,7 +114,7 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 onClick = {
                                     if (selection.active) vm.toggle(song.id) else vm.play(s.data, index)
                                 },
-                                onLongClick = { vm.enterSelection(song.id) },
+                                onLongClick = { if (!selection.active) vm.enterSelection(song.id) },
                                 trailing = {
                                     IconButton(onClick = { addingTo = song }) {
                                         Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
@@ -203,7 +203,7 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         val targetCount = songs.count { it.id in selection.selectedIds }
         AlertDialog(
             onDismissRequest = { bulkDeleting = false },
-            title = { Text("Delete $targetCount songs?") },
+            title = { Text(if (targetCount == 1) "Delete 1 song?" else "Delete $targetCount songs?") },
             text = {
                 Text(
                     "\"Delete downloads\" frees space on this device only — the Pi keeps the files for re-import. " +

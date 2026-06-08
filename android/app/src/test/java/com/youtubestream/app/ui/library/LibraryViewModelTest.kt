@@ -171,11 +171,15 @@ class LibraryViewModelTest {
         val dao = FakeDao(listOf(song("a"), song("b"), song("c")))
         val pi = piRepo(onDelete = { deleted += it; DeleteResponseDto(true) })
         val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
         vm.enterSelection("a"); vm.toggle("b")
         vm.deleteSelectedEverywhere(listOf(song("a"), song("b"), song("c")))
         runCurrent()
         assertEquals(setOf("a.m4a", "b.m4a"), deleted.toSet())      // only the selected, by filename
         assertEquals(listOf("c"), dao.songs.value.map { it.id })    // a,b gone locally; c stays
+        assertEquals(emptyList<String>(), errors)                  // all-success → no error emitted
     }
 
     @Test fun deleteSelectedEverywhereReportsPartialFailure() = runTest {
@@ -192,7 +196,7 @@ class LibraryViewModelTest {
         vm.deleteSelectedEverywhere(listOf(song("a"), song("b")))
         runCurrent()
         assertEquals(listOf("b"), dao.songs.value.map { it.id })    // a removed (Pi ok), b kept (Pi failed)
-        assertEquals(1, errors.size)                                // partial-failure summary emitted
+        assertEquals(listOf("1 of 2 removed from the server"), errors)   // exact summary text + count
     }
 
     @Test fun editArtworkRejectsNonYoutubeUrl() = runTest {
