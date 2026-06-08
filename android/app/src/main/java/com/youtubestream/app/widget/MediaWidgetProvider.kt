@@ -12,14 +12,18 @@ import com.youtubestream.app.App
  */
 class MediaWidgetProvider : AppWidgetProvider() {
 
-    /** Placement / resize / reboot: push one full refresh (incl. artwork). */
+    /** Placement / resize / reboot: push one full refresh (incl. artwork). Deliberately does NOT call
+     *  startPlayback() — repainting reads a state snapshot and must not wake the media stack from a
+     *  cold/background trigger (A0). A cold reboot paints idle until a tap routes through onReceive. */
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         (context.applicationContext as App).container.widgetUpdater.refresh()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action in WidgetIntents.COMMAND_ACTIONS) {
-            val connection = (context.applicationContext as App).container.playbackConnection
+            val container = (context.applicationContext as App).container
+            container.startPlayback()   // a widget command needs playback; also wires the state mirror on a cold start
+            val connection = container.playbackConnection
             val action = intent.action
             if (connection.state.value.isConnected) {
                 // Warm: run now (main thread).

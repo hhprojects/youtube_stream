@@ -52,6 +52,7 @@ import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
 import com.youtubestream.app.ui.podcast.PodcastHomeScreen
+import com.youtubestream.app.ui.podcast.PodcastSearchScreen
 import com.youtubestream.app.ui.podcast.ShowDetailScreen
 import com.youtubestream.app.ui.playlist.PlaylistDetailScreen
 import com.youtubestream.app.ui.playlist.PlaylistSource
@@ -72,18 +73,23 @@ private enum class Dest(val route: String, val label: String, val icon: ImageVec
 /** Search is reachable from Home's app bar, not the tab bar, so it's a plain route — not a [Dest]. */
 private const val SEARCH_ROUTE = "search"
 
+/** Podcast shows-search: a focused page reached from the Podcast tab's app bar — also not a [Dest]. */
+private const val PODCAST_SEARCH_ROUTE = "podcast/search"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavHost(
     container: AppContainer,
     openPlayerSignal: Boolean = false,
     onPlayerOpened: () -> Unit = {},
+    openPodcastSignal: Boolean = false,
+    onPodcastOpened: () -> Unit = {},
 ) {
     val connection = container.playbackConnection
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     val route = current?.destination
-    val onSearch = route?.hierarchy?.any { it.route == SEARCH_ROUTE } == true
+    val onSearch = route?.hierarchy?.any { it.route == SEARCH_ROUTE || it.route == PODCAST_SEARCH_ROUTE } == true
 
     val sheet = rememberPlayerSheetState()
     val scope = rememberCoroutineScope()
@@ -112,6 +118,18 @@ fun AppNavHost(
         }
     }
 
+    // New-episode notification deep link: jump to the Podcast tab once, then clear the signal.
+    LaunchedEffect(openPodcastSignal) {
+        if (openPodcastSignal) {
+            nav.navigate(Dest.Podcast.route) {
+                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            onPodcastOpened()
+        }
+    }
+
     // System/predictive back collapses the expanded player instead of leaving the app.
     BackHandler(enabled = sheet.isExpanded) { scope.launch { sheet.collapse() } }
 
@@ -131,6 +149,9 @@ fun AppNavHost(
                                 }
                                 Dest.Home -> IconButton(onClick = { nav.navigate(SEARCH_ROUTE) }) {
                                     Icon(Icons.Filled.Search, contentDescription = "Search")
+                                }
+                                Dest.Podcast -> IconButton(onClick = { nav.navigate(PODCAST_SEARCH_ROUTE) }) {
+                                    Icon(Icons.Filled.Search, contentDescription = "Search podcasts")
                                 }
                                 else -> {}
                             }
@@ -175,6 +196,13 @@ fun AppNavHost(
                     )
                 }
                 composable(SEARCH_ROUTE) { SearchScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
+                composable(PODCAST_SEARCH_ROUTE) {
+                    PodcastSearchScreen(
+                        onBack = { nav.popBackStack() },
+                        onShowClick = { showId -> nav.navigate("podcast/show/$showId") },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 composable(Dest.Settings.route) { SettingsScreen(Modifier.fillMaxSize()) }
                 composable(Dest.Podcast.route) {
                     PodcastHomeScreen(
