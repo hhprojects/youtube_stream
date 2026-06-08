@@ -51,6 +51,9 @@ interface PodcastSource {
     /** Background check: diff each followed show's latest episodes vs its anchor, advance anchors,
      *  and return the shows that gained new episodes (for the notification). Network call inside. */
     suspend fun checkForNewEpisodes(): List<ShowNewEpisodes>
+
+    /** Search YouTube Music podcast shows by name (results carry no author — filled on the detail screen). */
+    suspend fun search(query: String): List<PodcastShowCard>
 }
 
 /**
@@ -200,6 +203,9 @@ class PodcastRepository(
         }
         return out
     }
+
+    override suspend fun search(query: String): List<PodcastShowCard> =
+        api.search(query).shows.map { PodcastShowCard(it.showId, it.title, it.author, it.thumbnail) }
 
     // Same idiom as DownloadRepository: absolute URLs pass through; the fileClient's BaseUrlInterceptor
     // rewrites host/port to the configured Pi. Relative URLs are prefixed with the base URL.

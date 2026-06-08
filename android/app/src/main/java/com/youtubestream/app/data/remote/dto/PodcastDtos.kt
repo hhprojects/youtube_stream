@@ -17,6 +17,9 @@ data class PodcastShelfDto(val label: String, val shows: List<PodcastShowDto> = 
 data class PodcastHomeDto(val shelves: List<PodcastShelfDto> = emptyList())
 
 @Serializable
+data class PodcastSearchResultDto(val shows: List<PodcastShowDto> = emptyList())
+
+@Serializable
 data class PodcastEpisodeDto(
     val videoId: String,
     val title: String,
