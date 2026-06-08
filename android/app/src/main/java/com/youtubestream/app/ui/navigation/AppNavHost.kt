@@ -78,6 +78,8 @@ fun AppNavHost(
     container: AppContainer,
     openPlayerSignal: Boolean = false,
     onPlayerOpened: () -> Unit = {},
+    openPodcastSignal: Boolean = false,
+    onPodcastOpened: () -> Unit = {},
 ) {
     val connection = container.playbackConnection
     val nav = rememberNavController()
@@ -109,6 +111,18 @@ fun AppNavHost(
         if (openPlayerSignal) {
             sheet.expand()
             onPlayerOpened()
+        }
+    }
+
+    // New-episode notification deep link: jump to the Podcast tab once, then clear the signal.
+    LaunchedEffect(openPodcastSignal) {
+        if (openPodcastSignal) {
+            nav.navigate(Dest.Podcast.route) {
+                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            onPodcastOpened()
         }
     }
 

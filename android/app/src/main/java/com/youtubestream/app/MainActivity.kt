@@ -24,6 +24,9 @@ class MainActivity : ComponentActivity() {
     // Drives a one-shot navigation to the Player when launched from the widget body.
     private val openPlayer = mutableStateOf(false)
 
+    // Drives a one-shot navigation to the Podcast tab when launched from a new-episode notification.
+    private val openPodcast = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -33,6 +36,7 @@ class MainActivity : ComponentActivity() {
         }
 
         openPlayer.value = consumeOpenPlayer(intent)
+        openPodcast.value = consumeOpenPodcast(intent)
 
         val container = (application as App).container
         container.startPlayback()
@@ -43,6 +47,8 @@ class MainActivity : ComponentActivity() {
                     container = container,
                     openPlayerSignal = openPlayer.value,
                     onPlayerOpened = { openPlayer.value = false },
+                    openPodcastSignal = openPodcast.value,
+                    onPodcastOpened = { openPodcast.value = false },
                 )
             }
         }
@@ -52,6 +58,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openPlayer.value = consumeOpenPlayer(intent)
+        openPodcast.value = consumeOpenPodcast(intent)
     }
 
     /**
@@ -62,6 +69,16 @@ class MainActivity : ComponentActivity() {
         val open = intent?.getBooleanExtra(WidgetIntents.EXTRA_OPEN_PLAYER, false) == true
         if (open && intent != null) {
             intent.removeExtra(WidgetIntents.EXTRA_OPEN_PLAYER)
+            setIntent(intent)
+        }
+        return open
+    }
+
+    /** Mirror of [consumeOpenPlayer] for the new-episode notification's open-Podcast deep link. */
+    private fun consumeOpenPodcast(intent: Intent?): Boolean {
+        val open = intent?.getBooleanExtra(EXTRA_OPEN_PODCAST, false) == true
+        if (open && intent != null) {
+            intent.removeExtra(EXTRA_OPEN_PODCAST)
             setIntent(intent)
         }
         return open
@@ -90,6 +107,22 @@ class MainActivity : ComponentActivity() {
                 intent,
                 PendingIntent.FLAG_IMMUTABLE,
             )
+        }
+
+        const val EXTRA_OPEN_PODCAST = "com.youtubestream.app.OPEN_PODCAST"
+        private const val RC_OPEN_PODCAST = 201
+
+        /** Mirror of [openPlayerPendingIntent] — opens the app on the Podcast tab (new-episode notification). */
+        fun openPodcastPendingIntent(context: Context): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java)
+                .setAction(Intent.ACTION_MAIN)
+                .putExtra(EXTRA_OPEN_PODCAST, true)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
+            return PendingIntent.getActivity(context, RC_OPEN_PODCAST, intent, PendingIntent.FLAG_IMMUTABLE)
         }
     }
 }
