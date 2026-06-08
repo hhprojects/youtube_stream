@@ -24,6 +24,13 @@ class LibraryRepository(
     /** Removes just the Room row by id — used when playback hits a missing local file (file already gone). */
     suspend fun deleteById(id: String) = dao.deleteById(id)
 
+    /** Local-only batch delete: removes each song's file and Room row. The Pi copies stay. No-op on empty. */
+    suspend fun deleteAll(songs: List<LibrarySong>) {
+        if (songs.isEmpty()) return
+        withContext(io) { songs.forEach { File(it.localPath).delete() } }
+        dao.deleteByIds(songs.map { it.id })
+    }
+
     /** Updates one song's artwork by re-inserting it (REPLACE). Called after a successful Pi edit. */
     suspend fun setArtwork(song: LibrarySong, artworkUrl: String?) {
         dao.insert(song.copy(artworkUrl = artworkUrl))

@@ -36,6 +36,18 @@ class PlaylistRepository(private val dao: PlaylistDao) {
 
     suspend fun removeSong(playlistId: Long, songId: String) = dao.deleteMember(playlistId, songId)
 
+    /** Batch append; songs already in the playlist are skipped (DAO IGNORE). No-op on empty input. */
+    suspend fun addSongs(playlistId: Long, songIds: List<String>, now: Long) {
+        if (songIds.isEmpty()) return
+        dao.appendMembers(playlistId, songIds, now)
+    }
+
+    /** Batch remove from a playlist. No-op on empty input. */
+    suspend fun removeSongs(playlistId: Long, songIds: List<String>) {
+        if (songIds.isEmpty()) return
+        dao.deleteMembers(playlistId, songIds)
+    }
+
     /** Persist a new order produced by PlaylistReorder.reorder(...). */
     suspend fun setOrder(playlistId: Long, orderedSongIds: List<String>) =
         dao.setOrder(playlistId, orderedSongIds)

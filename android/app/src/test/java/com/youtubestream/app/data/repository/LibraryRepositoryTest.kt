@@ -20,6 +20,7 @@ class LibraryRepositoryTest {
         override suspend fun exists(id: String) = songs.value.any { it.id == id }
         override suspend fun insert(song: LibrarySong) = songs.update { it + song }
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
+        override suspend fun deleteByIds(ids: List<String>) = songs.update { l -> l.filterNot { it.id in ids } }
         override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
     }
 
@@ -58,6 +59,23 @@ class LibraryRepositoryTest {
         repo.setArtwork(song, "http://i/new.jpg")
 
         assertEquals("http://i/new.jpg", dao.songs.value.last().artworkUrl)
+    }
+
+    @Test
+    fun deleteAllRemovesEveryGivenRowAndFile() = runTest {
+        val fileA = File.createTempFile("aaa", ".m4a").apply { writeText("x") }
+        val fileB = File.createTempFile("bbb", ".m4a").apply { writeText("x") }
+        val a = LibrarySong("a", "T", "A", 1, fileA.name, fileA.absolutePath, 1L, 1L)
+        val b = LibrarySong("b", "T", "A", 1, fileB.name, fileB.absolutePath, 1L, 1L)
+        val c = LibrarySong("c", "T", "A", 1, "c.m4a", "/gone/c.m4a", 1L, 1L)
+        val dao = FakeDao(listOf(a, b, c))
+        val repo = LibraryRepository(dao)
+
+        repo.deleteAll(listOf(a, b))
+
+        assertFalse(fileA.exists())
+        assertFalse(fileB.exists())
+        assertEquals(listOf("c"), dao.songs.value.map { it.id })   // only the un-selected row remains
     }
 
     @Test

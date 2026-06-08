@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.youtubestream.app.playlist.PlaylistAppend
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -76,6 +77,16 @@ interface PlaylistDao {
 
     @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId AND songId = :songId")
     suspend fun deleteMember(playlistId: Long, songId: String)
+
+    @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId AND songId IN (:songIds)")
+    suspend fun deleteMembers(playlistId: Long, songIds: List<String>)
+
+    /** Append several songs at once; positions continue after the current max (IGNORE skips members). */
+    @Transaction
+    suspend fun appendMembers(playlistId: Long, songIds: List<String>, now: Long) {
+        PlaylistAppend.appendedMembers(playlistId, songIds, maxPosition(playlistId), now)
+            .forEach { insertMember(it) }
+    }
 
     @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :playlistId AND songId = :songId")
     suspend fun setPosition(playlistId: Long, songId: String, position: Int)
