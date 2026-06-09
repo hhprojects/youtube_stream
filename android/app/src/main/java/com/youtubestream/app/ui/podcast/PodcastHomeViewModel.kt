@@ -29,13 +29,14 @@ class PodcastHomeViewModel(
     val downloadsState: StateFlow<Map<String, ItemDownload>> = downloads.downloads
 
     val state: StateFlow<UiState<List<PodcastHomeSection>>> =
-        combine(_remote, repo.observeContinueListening()) { remote, cont ->
+        combine(_remote, repo.observeContinueListening(), repo.observeFollowedShows()) { remote, cont, followed ->
             when (remote) {
                 is UiState.Content ->
-                    UiState.Content(buildPodcastHome(cont, remote.data.latest, remote.data.shelves))
+                    UiState.Content(buildPodcastHome(followed, cont, remote.data.latest, remote.data.shelves))
                 is UiState.Error ->
-                    // Offline-friendly: still show downloaded in-progress episodes if the network half failed.
-                    if (cont.isNotEmpty()) UiState.Content(buildPodcastHome(cont, emptyList(), emptyList()))
+                    // Offline-friendly: followed shows + downloads are local, so still render them if the network half failed.
+                    if (cont.isNotEmpty() || followed.isNotEmpty())
+                        UiState.Content(buildPodcastHome(followed, cont, emptyList(), emptyList()))
                     else UiState.Error(remote.message)
                 else -> UiState.Loading
             }

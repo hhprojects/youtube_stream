@@ -45,6 +45,7 @@ interface PodcastSource {
     suspend fun isEpisode(mediaId: String): Boolean
     suspend fun getEpisode(id: String): PodcastEpisode?
     fun observeContinueListening(): Flow<List<PodcastEpisode>>
+    fun observeFollowedShows(): Flow<List<FollowedShow>>
     suspend fun followedShowIds(): List<String>
     suspend fun latestFromShows(showIds: List<String>): List<LatestEpisode>
 
@@ -161,6 +162,7 @@ class PodcastRepository(
     override suspend fun getEpisode(id: String): PodcastEpisode? = dao.getEpisode(id)
 
     override fun observeContinueListening(): Flow<List<PodcastEpisode>> = dao.observeContinueListening()
+    override fun observeFollowedShows(): Flow<List<FollowedShow>> = dao.observeFollowedShows()
 
     override suspend fun followedShowIds(): List<String> =
         dao.observeFollowedShows().first().map { it.showId }

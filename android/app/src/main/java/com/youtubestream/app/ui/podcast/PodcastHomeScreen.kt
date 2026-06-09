@@ -64,6 +64,12 @@ fun PodcastHomeScreen(
         ) {
             items(s.data) { section ->
                 when (section) {
+                    is PodcastHomeSection.Following -> ShelfCardRow(
+                        title = "Your shows",
+                        cards = section.shows.map { ShelfCardUi(it.showId, it.title, it.author ?: "", it.artworkUrl) },
+                        downloadingKeys = emptySet(),
+                        onCardClick = { i -> onShowClick(section.shows[i].showId) },
+                    )
                     is PodcastHomeSection.ContinueListening -> ShelfCardRow(
                         title = "Continue listening",
                         cards = section.episodes.map { ShelfCardUi(it.id, it.title, it.showName, it.artworkUrl) },
