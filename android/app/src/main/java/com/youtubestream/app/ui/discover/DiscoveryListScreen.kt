@@ -54,10 +54,7 @@ fun DiscoveryListScreen(
     val vm = appViewModel { c ->
         DiscoveryListViewModel(
             load = { load(c.discoveryRepository) },
-            downloads = DiscoveryDownloads(
-                downloader = c.downloadRepository,
-                play = { song -> c.playbackConnection.setQueueAndPlay(listOf(song.toPlayableTrack()), 0) },
-            ),
+            songDownloads = c.songDownloads,
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()

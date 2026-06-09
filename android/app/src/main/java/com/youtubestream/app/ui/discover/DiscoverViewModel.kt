@@ -7,6 +7,7 @@ import com.youtubestream.app.data.local.PlayEvent
 import com.youtubestream.app.data.model.DiscoverySong
 import com.youtubestream.app.data.network.ReachabilitySource
 import com.youtubestream.app.data.repository.DiscoverySource
+import com.youtubestream.app.ui.download.SongDownloads
 import com.youtubestream.app.ui.search.ItemDownload
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -34,11 +35,11 @@ class DiscoverViewModel(
     reachability: ReachabilitySource,
     private val observeLibrary: () -> Flow<List<LibrarySong>>,
     private val observeHistory: () -> Flow<List<PlayEvent>>,
-    private val downloads: DiscoveryDownloads,
+    private val songDownloads: SongDownloads,
     private val region: () -> String = { Locale.getDefault().country.ifBlank { "US" } },
 ) : ViewModel() {
 
-    val downloadsState: StateFlow<Map<String, ItemDownload>> = downloads.downloads
+    val downloadsState: StateFlow<Map<String, ItemDownload>> = songDownloads.downloads
 
     val state: StateFlow<DiscoverUiState> = reachability.status
         .map { discoverVisibility(it) }
@@ -79,5 +80,5 @@ class DiscoverViewModel(
     }
 
     fun onSongClick(song: DiscoverySong) =
-        downloads.download(viewModelScope, song.videoId, song.title, song.thumbnailUrl)
+        songDownloads.enqueue(song.videoId, song.title, song.thumbnailUrl)
 }

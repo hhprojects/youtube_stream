@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.model.DiscoverySong
 import com.youtubestream.app.data.model.MoodDetail
 import com.youtubestream.app.ui.UiState
+import com.youtubestream.app.ui.download.SongDownloads
 import com.youtubestream.app.ui.search.ItemDownload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,12 +15,12 @@ import kotlinx.coroutines.launch
 /** Loads a {title, songs} list via an injected loader; shared by mood-detail and genre-chart screens. */
 class DiscoveryListViewModel(
     private val load: suspend () -> MoodDetail,
-    private val downloads: DiscoveryDownloads,
+    private val songDownloads: SongDownloads,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState<MoodDetail>>(UiState.Loading)
     val state: StateFlow<UiState<MoodDetail>> = _state.asStateFlow()
-    val downloadsState: StateFlow<Map<String, ItemDownload>> = downloads.downloads
+    val downloadsState: StateFlow<Map<String, ItemDownload>> = songDownloads.downloads
 
     init { reload() }
 
@@ -35,5 +36,5 @@ class DiscoveryListViewModel(
     }
 
     fun onSongClick(song: DiscoverySong) =
-        downloads.download(viewModelScope, song.videoId, song.title, song.thumbnailUrl)
+        songDownloads.enqueue(song.videoId, song.title, song.thumbnailUrl)
 }

@@ -18,7 +18,6 @@ import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.discover.DiscoverUiState
 import com.youtubestream.app.ui.discover.DiscoverViewModel
-import com.youtubestream.app.ui.discover.DiscoveryDownloads
 import com.youtubestream.app.ui.discover.discoverSection
 import com.youtubestream.app.ui.library.toPlayableTrack
 
@@ -39,10 +38,7 @@ fun HomeScreen(onOpenMood: (String) -> Unit, onOpenGenre: (String, String) -> Un
             reachability = c.serverReachability,
             observeLibrary = { c.libraryRepository.observeLibrary() },
             observeHistory = { c.playHistoryRepository.observe() },
-            downloads = DiscoveryDownloads(
-                downloader = c.downloadRepository,
-                play = { song -> c.playbackConnection.setQueueAndPlay(listOf(song.toPlayableTrack()), 0) },
-            ),
+            songDownloads = c.songDownloads,
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()
