@@ -1,5 +1,6 @@
 package com.youtubestream.app.data.remote
 
+import com.youtubestream.app.data.remote.dto.DeleteResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastDownloadRequestDto
 import com.youtubestream.app.data.remote.dto.PodcastDownloadResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastHomeDto
@@ -8,6 +9,7 @@ import com.youtubestream.app.data.remote.dto.PodcastSearchResultDto
 import com.youtubestream.app.data.remote.dto.PodcastShowDetailDto
 import com.youtubestream.app.data.remote.dto.ShowIdsDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -29,4 +31,7 @@ interface PodcastApi {
 
     @GET("api/podcasts/search")
     suspend fun search(@Query("q") query: String): PodcastSearchResultDto
+
+    @DELETE("api/podcasts/episode/{filename}")
+    suspend fun deleteEpisode(@Path("filename") filename: String): DeleteResponseDto
 }

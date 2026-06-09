@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -55,6 +56,12 @@ interface PodcastSource {
 
     /** Search YouTube Music podcast shows by name (results carry no author — filled on the detail screen). */
     suspend fun search(query: String): List<PodcastShowCard>
+
+    /** Delete a downloaded episode locally: remove the file + the Room row. */
+    suspend fun deleteEpisode(episode: PodcastEpisode)
+
+    /** Delete everywhere: the Pi copy first (throws on failure → local kept), then the local file + row. */
+    suspend fun deleteEpisodeEverywhere(episode: PodcastEpisode)
 }
 
 /**
@@ -208,6 +215,16 @@ class PodcastRepository(
 
     override suspend fun search(query: String): List<PodcastShowCard> =
         api.search(query).shows.map { PodcastShowCard(it.showId, it.title, it.author, it.thumbnail) }
+
+    override suspend fun deleteEpisode(episode: PodcastEpisode) {
+        withContext(Dispatchers.IO) { File(episode.localPath).delete() }
+        dao.deleteEpisodeById(episode.id)
+    }
+
+    override suspend fun deleteEpisodeEverywhere(episode: PodcastEpisode) {
+        api.deleteEpisode(episode.filename)   // Pi first — a failure propagates, leaving the local copy intact
+        deleteEpisode(episode)
+    }
 
     // Same idiom as DownloadRepository: absolute URLs pass through; the fileClient's BaseUrlInterceptor
     // rewrites host/port to the configured Pi. Relative URLs are prefixed with the base URL.
