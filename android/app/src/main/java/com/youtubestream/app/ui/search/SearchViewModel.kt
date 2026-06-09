@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 
 /** Per-result download status a row renders. `Completed` isn't here — a finished id moves to [SearchViewModel.downloadedIds]. */
 sealed interface ItemDownload {
+    data object Queued : ItemDownload
     data class Downloading(val fraction: Float) : ItemDownload
     data class Failed(val message: String) : ItemDownload
 }
