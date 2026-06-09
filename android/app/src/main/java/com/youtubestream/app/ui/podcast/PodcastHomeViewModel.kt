@@ -3,6 +3,7 @@ package com.youtubestream.app.ui.podcast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.local.PodcastEpisode
+import com.youtubestream.app.data.model.PodcastFreshShelf
 import com.youtubestream.app.data.model.PodcastShelf
 import com.youtubestream.app.data.model.PodcastShowDetail
 import com.youtubestream.app.data.repository.PodcastSource
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /** Remote half of the home: the curated/featured show shelves + the latest-from-followed episodes. */
@@ -26,17 +28,24 @@ class PodcastHomeViewModel(
 ) : ViewModel() {
 
     private val _remote = MutableStateFlow<UiState<RemoteHome>>(UiState.Loading)
+    private val _mode = MutableStateFlow(PodcastHomeMode.Popular)
+    val mode: StateFlow<PodcastHomeMode> = _mode
+    private val _freshShelves = MutableStateFlow<List<PodcastFreshShelf>>(emptyList())
+    private val _freshLoading = MutableStateFlow(false)
+    val freshLoading: StateFlow<Boolean> = _freshLoading
+    private var freshRequested = false
     val downloadsState: StateFlow<Map<String, ItemDownload>> = downloads.downloads
 
     val state: StateFlow<UiState<List<PodcastHomeSection>>> =
-        combine(_remote, repo.observeContinueListening(), repo.observeFollowedShows()) { remote, cont, followed ->
+        combine(_mode, _remote, repo.observeContinueListening(), repo.observeFollowedShows(), _freshShelves) {
+            mode, remote, cont, followed, fresh ->
             when (remote) {
                 is UiState.Content ->
-                    UiState.Content(buildPodcastHome(followed, cont, remote.data.latest, remote.data.shelves))
+                    UiState.Content(buildPodcastHome(mode, followed, cont, remote.data.shelves, remote.data.latest, fresh))
                 is UiState.Error ->
-                    // Offline-friendly: followed shows + downloads are local, so still render them if the network half failed.
+                    // Offline-friendly: followed shows + downloads are local, so still render chrome + toggle.
                     if (cont.isNotEmpty() || followed.isNotEmpty())
-                        UiState.Content(buildPodcastHome(followed, cont, emptyList(), emptyList()))
+                        UiState.Content(buildPodcastHome(mode, followed, cont, emptyList(), emptyList(), fresh))
                     else UiState.Error(remote.message)
                 else -> UiState.Loading
             }
@@ -53,6 +62,29 @@ class PodcastHomeViewModel(
                 UiState.Content(RemoteHome(shelves, latest))
             } catch (e: Exception) {
                 UiState.Error(e.message ?: "Couldn't load podcasts")
+            }
+        }
+    }
+
+    fun setMode(newMode: PodcastHomeMode) {
+        _mode.value = newMode
+        if (newMode == PodcastHomeMode.Newest && !freshRequested) {
+            freshRequested = true
+            loadFresh()
+        }
+    }
+
+    private fun loadFresh() {
+        viewModelScope.launch {
+            _freshLoading.value = true
+            try {
+                _freshShelves.value = repo.fresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                freshRequested = false   // allow a retry on the next switch to Newest
+            } finally {
+                _freshLoading.value = false
             }
         }
     }

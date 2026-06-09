@@ -6,11 +6,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +32,7 @@ import com.youtubestream.app.ui.home.ShelfCardUi
 import com.youtubestream.app.ui.search.ItemDownload
 
 /** Podcast tab landing: Continue listening + Latest from your shows + curated/featured show shelves. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PodcastHomeScreen(
     onShowClick: (showId: String) -> Unit,
@@ -45,6 +52,8 @@ fun PodcastHomeScreen(
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val downloads by vm.downloadsState.collectAsStateWithLifecycle()
+    val mode by vm.mode.collectAsStateWithLifecycle()
+    val freshLoading by vm.freshLoading.collectAsStateWithLifecycle()
 
     when (val s = state) {
         is UiState.Loading, UiState.Idle ->
@@ -64,6 +73,17 @@ fun PodcastHomeScreen(
         ) {
             items(s.data) { section ->
                 when (section) {
+                    is PodcastHomeSection.ModeToggle -> SingleChoiceSegmentedButtonRow(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    ) {
+                        PodcastHomeMode.entries.forEachIndexed { i, m ->
+                            SegmentedButton(
+                                selected = section.mode == m,
+                                onClick = { vm.setMode(m) },
+                                shape = SegmentedButtonDefaults.itemShape(index = i, count = PodcastHomeMode.entries.size),
+                            ) { Text(if (m == PodcastHomeMode.Popular) "Popular" else "Newest") }
+                        }
+                    }
                     is PodcastHomeSection.Following -> ShelfCardRow(
                         title = "Your shows",
                         cards = section.shows.map { ShelfCardUi(it.showId, it.title, it.author ?: "", it.artworkUrl) },
@@ -82,6 +102,12 @@ fun PodcastHomeScreen(
                         downloadingKeys = downloads.filterValues { it is ItemDownload.Downloading }.keys,
                         onCardClick = { i -> vm.onDownload(section.items[i]) },
                     )
+                    is PodcastHomeSection.FreshTopic -> ShelfCardRow(
+                        title = "Fresh in ${section.label}",
+                        cards = section.items.map { ShelfCardUi(it.episode.videoId, it.episode.title, it.showName, it.episode.artworkUrl) },
+                        downloadingKeys = downloads.filterValues { it is ItemDownload.Downloading }.keys,
+                        onCardClick = { i -> vm.onDownload(section.items[i]) },
+                    )
                     is PodcastHomeSection.ShowShelf -> ShelfCardRow(
                         title = section.label,
                         cards = section.shows.map { ShelfCardUi(it.showId, it.title, it.author ?: "", it.artworkUrl) },
@@ -89,6 +115,9 @@ fun PodcastHomeScreen(
                         onCardClick = { i -> onShowClick(section.shows[i].showId) },
                     )
                 }
+            }
+            if (mode == PodcastHomeMode.Newest && freshLoading) {
+                item { Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator() } }
             }
         }
     }
