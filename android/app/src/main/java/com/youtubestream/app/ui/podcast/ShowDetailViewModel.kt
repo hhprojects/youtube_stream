@@ -8,7 +8,9 @@ import com.youtubestream.app.data.repository.PodcastSource
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.download.PodcastDownloads
 import com.youtubestream.app.ui.search.ItemDownload
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +32,10 @@ class ShowDetailViewModel(
         repo.observeIsFollowing(showId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val downloadsState: StateFlow<Map<String, ItemDownload>> = downloads.downloads
+
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    /** One-shot delete errors (e.g. the Pi delete failed) — the screen Toasts these. */
+    val errors: SharedFlow<String> = _errors
 
     /** Merged episode rows: remote episodes folded with the locally-downloaded set (reactive). */
     val rows: StateFlow<List<EpisodeRowUi>> =
@@ -61,5 +67,22 @@ class ShowDetailViewModel(
     /** Play an already-downloaded episode by its local id (= filename). The play lambda applies resume. */
     fun onPlayDownloaded(localId: String) {
         viewModelScope.launch { repo.getEpisode(localId)?.let(play) }
+    }
+
+    /** Delete just the local copy (file + Room row). */
+    fun onDeleteDownload(localId: String) {
+        viewModelScope.launch { repo.getEpisode(localId)?.let { repo.deleteEpisode(it) } }
+    }
+
+    /** Delete the local copy AND the Pi copy. Pi first: on failure, the local copy is kept + an error shown. */
+    fun onDeleteEverywhere(localId: String) {
+        viewModelScope.launch {
+            val ep = repo.getEpisode(localId) ?: return@launch
+            try {
+                repo.deleteEpisodeEverywhere(ep)
+            } catch (e: Exception) {
+                _errors.tryEmit(e.message ?: "Couldn't delete from the Pi")
+            }
+        }
     }
 }
