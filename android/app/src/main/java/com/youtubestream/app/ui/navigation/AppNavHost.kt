@@ -45,6 +45,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.youtubestream.app.di.AppContainer
 import com.youtubestream.app.ui.discover.DiscoveryListScreen
+import com.youtubestream.app.ui.download.DownloadsIndicator
 import com.youtubestream.app.ui.home.HomeScreen
 import com.youtubestream.app.ui.imports.ImportScreen
 import com.youtubestream.app.ui.library.LibraryHomeScreen
@@ -143,6 +144,7 @@ fun AppNavHost(
                     TopAppBar(
                         title = { Text(dest.label) },
                         actions = {
+                            DownloadsIndicator(container.songDownloads, container.podcastDownloads)
                             when (dest) {
                                 Dest.Library -> IconButton(onClick = { nav.navigate("import") }) {
                                     Icon(Icons.Filled.CloudDownload, contentDescription = "Import from Pi")
