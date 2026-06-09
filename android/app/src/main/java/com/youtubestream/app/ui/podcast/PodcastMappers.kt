@@ -44,3 +44,21 @@ fun PodcastEpisode.toPlayableTrack(): PlayableTrack = PlayableTrack(
     artworkUri = artworkUrl,
     isPodcast = true,
 )
+
+/** A "Play all" queue (startIndex is always 0 — the queue is exactly the episodes to play). */
+data class PlayAllQueue(val episodes: List<PodcastEpisode>, val startPositionMs: Long)
+
+/**
+ * Oldest-first downloaded queue for one show. Returns null if the show has no downloaded episodes.
+ * Orders by the remote list reversed (authoritative chronological order — publishedDate is unreliable),
+ * keeps only downloaded episodes, skips finished, and resumes the oldest unfinished one. If every
+ * downloaded episode is finished, replays them all oldest-first from 0 (so the button is never a dead end).
+ */
+fun playAllQueue(remoteVideoIdsNewestFirst: List<String>, downloaded: List<PodcastEpisode>): PlayAllQueue? {
+    val byId = downloaded.associateBy { it.videoId }
+    val oldestFirst = remoteVideoIdsNewestFirst.reversed().mapNotNull { byId[it] }
+    if (oldestFirst.isEmpty()) return null
+    val unfinished = oldestFirst.filter { !it.isFinished }
+    return if (unfinished.isNotEmpty()) PlayAllQueue(unfinished, unfinished.first().resumePositionMs)
+    else PlayAllQueue(oldestFirst, 0L)
+}
