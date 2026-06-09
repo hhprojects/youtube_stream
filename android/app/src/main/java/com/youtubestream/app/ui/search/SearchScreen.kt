@@ -52,7 +52,7 @@ import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
 fun SearchScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
-    val vm = appViewModel { SearchViewModel(it.searchRepository, it.downloadRepository, it.libraryRepository, it.serverReachability, it.recentSearchRepository) }
+    val vm = appViewModel { SearchViewModel(it.searchRepository, it.songDownloads, it.libraryRepository, it.serverReachability, it.recentSearchRepository) }
     val state by vm.state.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val downloaded by vm.downloadedIds.collectAsStateWithLifecycle()

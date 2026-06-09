@@ -2,15 +2,14 @@ package com.youtubestream.app.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.youtubestream.app.data.model.DownloadState
 import com.youtubestream.app.data.model.SearchResult
 import com.youtubestream.app.data.network.ReachabilitySource
 import com.youtubestream.app.data.network.ServerStatus
-import com.youtubestream.app.data.repository.Downloader
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.RecentSearchRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.ui.UiState
+import com.youtubestream.app.ui.download.SongDownloads
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** Per-result download status a row renders. `Completed` isn't here — a finished id moves to [SearchViewModel.downloadedIds]. */
@@ -31,7 +29,7 @@ sealed interface ItemDownload {
 
 class SearchViewModel(
     private val repo: SearchRepository,
-    private val downloader: Downloader,
+    private val songDownloads: SongDownloads,
     private val library: LibraryRepository,
     private val reachability: ReachabilitySource,
     private val recentsRepo: RecentSearchRepository,
@@ -40,9 +38,8 @@ class SearchViewModel(
     private val _state = MutableStateFlow<UiState<List<SearchResult>>>(UiState.Idle)
     val state: StateFlow<UiState<List<SearchResult>>> = _state.asStateFlow()
 
-    private val _downloads = MutableStateFlow<Map<String, ItemDownload>>(emptyMap())
-    /** id → in-flight/failed download. Absent means "not downloading" (idle, or already done). */
-    val downloads: StateFlow<Map<String, ItemDownload>> = _downloads.asStateFlow()
+    /** id → queued/in-flight/failed download, from the app-scoped queue (survives leaving the screen). */
+    val downloads: StateFlow<Map<String, ItemDownload>> = songDownloads.downloads
 
     /** videoIds already in the local library — rows render these as "downloaded". (id is the filename now.) */
     val downloadedIds: StateFlow<Set<String>> = library.observeLibrary()
@@ -81,26 +78,9 @@ class SearchViewModel(
 
     fun clearRecents() { viewModelScope.launch { recentsRepo.clear() } }
 
-    fun download(result: SearchResult) {
-        if (_downloads.value[result.id] is ItemDownload.Downloading) return   // ignore double-taps
-        // Mark "downloading" immediately so the row reacts before the (slow) yt-dlp POST returns,
-        // and so the guard above blocks repeat taps during that window.
-        _downloads.update { it + (result.id to ItemDownload.Downloading(0f)) }
-        viewModelScope.launch {
-            downloader.download(result.id, result.title, result.thumbnailUrl).collect { st ->
-                _downloads.update { current ->
-                    when (st) {
-                        is DownloadState.InProgress ->
-                            current + (result.id to ItemDownload.Downloading(st.fraction))
-                        is DownloadState.Completed ->
-                            current - result.id   // now appears in downloadedIds via the Room flow
-                        is DownloadState.Failed ->
-                            current + (result.id to ItemDownload.Failed(st.error.message ?: "Download failed"))
-                    }
-                }
-            }
-        }
-    }
+    /** Queue the download on the app-scoped queue (dedupe + sequential processing live there), so it
+     *  keeps running after the user leaves the Search screen. */
+    fun download(result: SearchResult) = songDownloads.enqueue(result)
 
     private companion object { const val RECENTS_LIMIT = 8 }
 }
