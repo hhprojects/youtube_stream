@@ -29,6 +29,9 @@ async function main() {
     problems.push('[podcast] skipped — no showId from podcast_search (search is broken)');
   }
 
+  const fresh = await run('podcast_fresh', SEED_QUERY);
+  problems.push(...validatePodcastShape('podcast_fresh', fresh).map((p) => `[podcast_fresh] ${p}`));
+
   if (problems.length) {
     console.error('PODCAST DRIFT DETECTED — ytmusicapi output no longer matches discovery.py:');
     for (const p of problems) console.error('  - ' + p);

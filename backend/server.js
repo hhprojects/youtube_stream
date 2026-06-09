@@ -28,6 +28,7 @@ const PODCAST_CATEGORIES = [
   { label: 'Business & Startups', query: 'startup business podcast' },
   { label: 'Finance', query: 'personal finance podcast' },
   { label: 'Self-improvement', query: 'self improvement podcast' },
+  { label: 'System Design', query: 'system design podcast' },
 ];
 // Featured show browseIds — resolve once via `discovery.py podcast_search "<name>"` and pin them here
 // (e.g. Android Developers, Apple Developer). Empty is valid: /home just omits the Featured shelf.
@@ -402,6 +403,19 @@ app.post('/api/podcasts/shows/latest', async (req, res) => {
     }
   }));
   res.json({ shows });
+});
+
+app.get('/api/podcasts/fresh', (req, res) => {
+  const labeled = discovery
+    .getPodcastFresh(runDiscovery, discoveryCache, PODCAST_CATEGORIES.map((c) => c.query))
+    .then((data) => {
+      const byQuery = new Map((data.shelves || []).map((s) => [s.query, s.shows || []]));
+      const shelves = PODCAST_CATEGORIES
+        .map((cat) => ({ label: cat.label, shows: byQuery.get(cat.query) || [] }))
+        .filter((s) => s.shows.length > 0);   // drop topics that yielded nothing
+      return { shelves };
+    });
+  sendDiscovery(res, labeled);
 });
 
 app.post('/api/podcasts/download', (req, res) => {
