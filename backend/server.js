@@ -444,6 +444,24 @@ app.post('/api/podcasts/download', (req, res) => {
   });
 });
 
+// Delete a downloaded episode from the Pi (the user's "Delete everywhere"). Mirrors the song
+// DELETE /api/library/:filename — manual-delete-only, podcasts are never auto-pruned.
+app.delete('/api/podcasts/episode/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename).replace(/[^a-zA-Z0-9_.-]/g, '');
+  if (!filename || !(filename.endsWith('.m4a') || filename.endsWith('.mp3'))) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  const filePath = path.join(PODCAST_DIR, filename);
+  try {
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+    fs.unlinkSync(filePath);
+    try { fs.unlinkSync(sidecarPathFor(PODCAST_DIR, filename)); } catch {}
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
 if (require.main === module) {
   pruneDownloads();
   app.listen(PORT, HOST, () => {
