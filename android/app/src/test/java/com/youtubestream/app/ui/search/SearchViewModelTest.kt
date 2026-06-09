@@ -19,6 +19,9 @@ import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.RecentSearchRepository
 import com.youtubestream.app.data.repository.SearchRepository
 import com.youtubestream.app.ui.UiState
+import com.youtubestream.app.ui.download.DownloadQueue
+import com.youtubestream.app.ui.download.SongDownloads
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -89,7 +92,7 @@ class SearchViewModelTest {
         recentsDao: FakeRecentSearchDao = FakeRecentSearchDao(),
     ) = SearchViewModel(
         repo = SearchRepository(fakeApi(onSearch)),
-        downloader = { id, title, artwork -> downloader(id, title, artwork) },
+        songDownloads = SongDownloads(DownloadQueue(CoroutineScope(dispatcher)), { id, title, artwork -> downloader(id, title, artwork) }),
         library = LibraryRepository(dao),
         reachability = reachability,
         recentsRepo = RecentSearchRepository(recentsDao),
@@ -142,10 +145,9 @@ class SearchViewModelTest {
 
         val song = LibrarySong("v1", "Title", "Artist", 0, "v1.m4a", "/songs/v1.m4a", 1L, 1L)
         channel.send(DownloadState.Completed(song))
+        channel.close()                        // the real download flow ends right after Completed → queue removes the key
         runCurrent()
         assertNull(vm.downloads.value["v1"])   // finished ids move out of the progress map
-
-        channel.close()
     }
 
     @Test fun downloadFailureMarksRowFailed() = runTest {

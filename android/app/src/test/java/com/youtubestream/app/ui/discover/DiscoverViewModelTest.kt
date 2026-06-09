@@ -10,6 +10,9 @@ import com.youtubestream.app.data.model.MoodDetail
 import com.youtubestream.app.data.network.ReachabilitySource
 import com.youtubestream.app.data.network.ServerStatus
 import com.youtubestream.app.data.repository.DiscoverySource
+import com.youtubestream.app.ui.download.DownloadQueue
+import com.youtubestream.app.ui.download.SongDownloads
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,7 +67,7 @@ class DiscoverViewModelTest {
         reachability = reach,
         observeLibrary = { MutableStateFlow(library) },
         observeHistory = { MutableStateFlow(history) },
-        downloads = DiscoveryDownloads(downloader = { _, _, _ -> emptyFlow() }, play = {}),
+        songDownloads = SongDownloads(DownloadQueue(CoroutineScope(dispatcher)), { _, _, _ -> emptyFlow() }),
         region = { "US" },
     )
 
