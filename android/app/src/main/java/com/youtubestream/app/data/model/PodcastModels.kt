@@ -13,6 +13,8 @@ data class PodcastEpisodeItem(
     val artworkUrl: String?,
 )
 
+data class PodcastFreshShelf(val label: String, val items: List<com.youtubestream.app.ui.podcast.LatestEpisode>)
+
 data class PodcastShowDetail(
     val showId: String,
     val title: String,

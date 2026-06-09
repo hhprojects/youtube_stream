@@ -70,3 +70,9 @@ data class LatestShowDto(
 
 @Serializable
 data class PodcastLatestResponseDto(val shows: List<LatestShowDto> = emptyList())
+
+@Serializable
+data class PodcastFreshShelfDto(val label: String, val shows: List<LatestShowDto> = emptyList())
+
+@Serializable
+data class PodcastFreshResponseDto(val shelves: List<PodcastFreshShelfDto> = emptyList())

@@ -4,6 +4,7 @@ import com.youtubestream.app.data.remote.dto.DeleteResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastDownloadRequestDto
 import com.youtubestream.app.data.remote.dto.PodcastDownloadResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastHomeDto
+import com.youtubestream.app.data.remote.dto.PodcastFreshResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastLatestResponseDto
 import com.youtubestream.app.data.remote.dto.PodcastSearchResultDto
 import com.youtubestream.app.data.remote.dto.PodcastShowDetailDto
@@ -19,6 +20,9 @@ import retrofit2.http.Query
 interface PodcastApi {
     @GET("api/podcasts/home")
     suspend fun home(): PodcastHomeDto
+
+    @GET("api/podcasts/fresh")
+    suspend fun fresh(): PodcastFreshResponseDto
 
     @GET("api/podcasts/show/{showId}")
     suspend fun show(@Path("showId") showId: String): PodcastShowDetailDto

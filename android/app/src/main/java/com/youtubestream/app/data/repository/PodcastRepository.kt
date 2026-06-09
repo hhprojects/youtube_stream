@@ -4,6 +4,7 @@ import com.youtubestream.app.data.local.FollowedShow
 import com.youtubestream.app.data.local.PodcastDao
 import com.youtubestream.app.data.local.PodcastEpisode
 import com.youtubestream.app.data.model.PodcastEpisodeItem
+import com.youtubestream.app.data.model.PodcastFreshShelf
 import com.youtubestream.app.data.model.PodcastShelf
 import com.youtubestream.app.data.model.PodcastShowCard
 import com.youtubestream.app.data.model.PodcastShowDetail
@@ -11,6 +12,7 @@ import com.youtubestream.app.data.model.ShowNewEpisodes
 import com.youtubestream.app.data.model.newEpisodesSince
 import com.youtubestream.app.data.model.parsePodcastDuration
 import com.youtubestream.app.data.remote.PodcastApi
+import com.youtubestream.app.data.remote.dto.LatestShowDto
 import com.youtubestream.app.data.remote.dto.PodcastDownloadRequestDto
 import com.youtubestream.app.data.remote.dto.ShowIdsDto
 import com.youtubestream.app.ui.podcast.LatestEpisode
@@ -49,6 +51,7 @@ interface PodcastSource {
     fun observeFollowedShows(): Flow<List<FollowedShow>>
     suspend fun followedShowIds(): List<String>
     suspend fun latestFromShows(showIds: List<String>): List<LatestEpisode>
+    suspend fun fresh(): List<PodcastFreshShelf>
 
     /** Background check: diff each followed show's latest episodes vs its anchor, advance anchors,
      *  and return the shows that gained new episodes (for the notification). Network call inside. */
@@ -176,21 +179,29 @@ class PodcastRepository(
 
     override suspend fun latestFromShows(showIds: List<String>): List<LatestEpisode> {
         if (showIds.isEmpty()) return emptyList()
-        return api.latestForShows(ShowIdsDto(showIds)).shows.mapNotNull { s ->
-            val top = s.episodes.firstOrNull() ?: return@mapNotNull null   // newest-first → [0]
-            LatestEpisode(
-                showId = s.showId,
-                showName = s.title ?: "",
-                episode = PodcastEpisodeItem(
-                    videoId = top.videoId,
-                    title = top.title,
-                    durationSeconds = parsePodcastDuration(top.duration),
-                    publishedDate = top.date,
-                    description = top.description,
-                    artworkUrl = top.thumbnail,
-                ),
-            )
-        }
+        return api.latestForShows(ShowIdsDto(showIds)).shows.mapNotNull { it.toLatestEpisodeOrNull() }
+    }
+
+    override suspend fun fresh(): List<PodcastFreshShelf> =
+        api.fresh().shelves
+            .map { shelf -> PodcastFreshShelf(shelf.label, shelf.shows.mapNotNull { it.toLatestEpisodeOrNull() }) }
+            .filter { it.items.isNotEmpty() }
+
+    /** A show's newest episode (episodes[0]) → LatestEpisode, or null if the show has none. */
+    private fun LatestShowDto.toLatestEpisodeOrNull(): LatestEpisode? {
+        val top = episodes.firstOrNull() ?: return null
+        return LatestEpisode(
+            showId = showId,
+            showName = title ?: "",
+            episode = PodcastEpisodeItem(
+                videoId = top.videoId,
+                title = top.title,
+                durationSeconds = parsePodcastDuration(top.duration),
+                publishedDate = top.date,
+                description = top.description,
+                artworkUrl = top.thumbnail,
+            ),
+        )
     }
 
     override suspend fun checkForNewEpisodes(): List<ShowNewEpisodes> {
