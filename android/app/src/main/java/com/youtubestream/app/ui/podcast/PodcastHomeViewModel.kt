@@ -7,6 +7,7 @@ import com.youtubestream.app.data.model.PodcastShelf
 import com.youtubestream.app.data.model.PodcastShowDetail
 import com.youtubestream.app.data.repository.PodcastSource
 import com.youtubestream.app.ui.UiState
+import com.youtubestream.app.ui.download.PodcastDownloads
 import com.youtubestream.app.ui.search.ItemDownload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,10 +59,10 @@ class PodcastHomeViewModel(
     /** Continue listening tap: play the already-downloaded episode (resume applied by the play lambda). */
     fun onPlay(episode: PodcastEpisode) = playDownloaded(episode)
 
-    /** Latest tap: download the (remote) episode, then it auto-plays. A lightweight show detail carries
-     *  just the fields the download needs (title → showName, showId). */
-    fun onDownloadAndPlay(item: LatestEpisode) {
+    /** Latest tap: queue the (remote) episode for download (decoupled — no auto-play; play it once it's
+     *  downloaded). A lightweight show detail carries just the fields the download needs (showName, showId). */
+    fun onDownload(item: LatestEpisode) {
         val lite = PodcastShowDetail(item.showId, item.showName, null, null, null, emptyList())
-        downloads.download(viewModelScope, lite, item.episode)
+        downloads.enqueue(lite, item.episode)
     }
 }

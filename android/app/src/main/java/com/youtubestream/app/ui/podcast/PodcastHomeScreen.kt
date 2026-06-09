@@ -39,7 +39,7 @@ fun PodcastHomeScreen(
         }
         PodcastHomeViewModel(
             repo = c.podcastRepository,
-            downloads = PodcastDownloads(repo = c.podcastRepository, play = play),
+            downloads = c.podcastDownloads,
             playDownloaded = play,
         )
     }
@@ -74,7 +74,7 @@ fun PodcastHomeScreen(
                         title = "Latest from your shows",
                         cards = section.items.map { ShelfCardUi(it.episode.videoId, it.episode.title, it.showName, it.episode.artworkUrl) },
                         downloadingKeys = downloads.filterValues { it is ItemDownload.Downloading }.keys,
-                        onCardClick = { i -> vm.onDownloadAndPlay(section.items[i]) },
+                        onCardClick = { i -> vm.onDownload(section.items[i]) },
                     )
                     is PodcastHomeSection.ShowShelf -> ShelfCardRow(
                         title = section.label,

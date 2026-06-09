@@ -59,7 +59,7 @@ fun ShowDetailScreen(
         ShowDetailViewModel(
             showId = showId,
             repo = c.podcastRepository,
-            downloads = PodcastDownloads(repo = c.podcastRepository, play = play),
+            downloads = c.podcastDownloads,
             play = play,
         )
     }

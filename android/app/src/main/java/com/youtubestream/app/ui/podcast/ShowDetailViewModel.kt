@@ -6,6 +6,7 @@ import com.youtubestream.app.data.local.PodcastEpisode
 import com.youtubestream.app.data.model.PodcastShowDetail
 import com.youtubestream.app.data.repository.PodcastSource
 import com.youtubestream.app.ui.UiState
+import com.youtubestream.app.ui.download.PodcastDownloads
 import com.youtubestream.app.ui.search.ItemDownload
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,7 +55,7 @@ class ShowDetailViewModel(
     fun onDownload(videoId: String) {
         val d = (_detail.value as? UiState.Content)?.data ?: return
         val ep = d.episodes.firstOrNull { it.videoId == videoId } ?: return
-        downloads.download(viewModelScope, d, ep)
+        downloads.enqueue(d, ep)
     }
 
     /** Play an already-downloaded episode by its local id (= filename). The play lambda applies resume. */
