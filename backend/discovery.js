@@ -37,6 +37,8 @@ const getGenreCharts = (run, cache, region) => cached(cache, `genrecharts:${regi
 const getPlaylist = (run, cache, playlistId) => cached(cache, `playlist:${playlistId}`, () => run('playlist', playlistId));
 const getPodcastSearch = (run, cache, query) => cached(cache, `podcast_search:${query}`, () => run('podcast_search', query));
 const getPodcast = (run, cache, showId) => cached(cache, `podcast:${showId}`, () => run('podcast', showId));
+const getPodcastFresh = (run, cache, queries) =>
+  cached(cache, `podcast_fresh:${queries.join('|')}`, () => run('podcast_fresh', ...queries));
 
 /**
  * Shape guard for discovery payloads. Returns a list of problem strings (empty = OK).
@@ -105,10 +107,24 @@ function validatePodcastShape(kind, data) {
       if (!isStr(eps[0].title)) problems.push('podcast: episodes[0].title missing/empty');
       break;
     }
+    case 'podcast_fresh': {
+      const shelves = data.shelves;
+      if (!Array.isArray(shelves)) { problems.push('podcast_fresh: shelves is not an array'); break; }
+      if (shelves.length === 0) { problems.push('podcast_fresh: shelves is empty'); break; }
+      const withShows = shelves.find((s) => Array.isArray(s.shows) && s.shows.length > 0);
+      if (!withShows) { problems.push('podcast_fresh: no shelf has shows'); break; }
+      const show = withShows.shows[0];
+      if (!isStr(show.showId)) problems.push('podcast_fresh: shows[0].showId missing/empty');
+      if (!isStr(show.title)) problems.push('podcast_fresh: shows[0].title missing/empty');
+      const ep = show.episodes && show.episodes[0];
+      if (!ep || !isStr(ep.videoId)) problems.push('podcast_fresh: shows[0].episodes[0].videoId missing/empty');
+      else if (!isStr(ep.title)) problems.push('podcast_fresh: shows[0].episodes[0].title missing/empty');
+      break;
+    }
     default:
       problems.push(`unknown kind: ${kind}`);
   }
   return problems;
 }
 
-module.exports = { parseDiscoveryOutput, makeRunner, getTrending, getRelated, getMoods, getMood, getGenreCharts, getPlaylist, validateDiscoveryShape, getPodcastSearch, getPodcast, validatePodcastShape };
+module.exports = { parseDiscoveryOutput, makeRunner, getTrending, getRelated, getMoods, getMood, getGenreCharts, getPlaylist, validateDiscoveryShape, getPodcastSearch, getPodcast, getPodcastFresh, validatePodcastShape };

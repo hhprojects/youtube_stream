@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createCache } = require('./cache');
-const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape, getGenreCharts, getPlaylist, getPodcastSearch, getPodcast, validatePodcastShape } = require('./discovery');
+const { parseDiscoveryOutput, getTrending, getRelated, getMoods, getMood, validateDiscoveryShape, getGenreCharts, getPlaylist, getPodcastSearch, getPodcast, validatePodcastShape, getPodcastFresh } = require('./discovery');
 
 const FIX = path.join(__dirname, 'test', 'fixtures', 'discovery');
 const raw = (name) => fs.readFileSync(path.join(FIX, name), 'utf8');
@@ -121,4 +121,32 @@ test('validatePodcastShape: flags drift (empty, missing fields)', () => {
   assert.ok(validatePodcastShape('podcast_search', { shows: [{ title: 'X' }] }).length > 0);   // missing showId
   assert.ok(validatePodcastShape('podcast', { title: 'Show', episodes: [] }).length > 0);      // no episodes
   assert.ok(validatePodcastShape('podcast', { title: 'S', episodes: [{ title: 'no id' }] }).length > 0); // missing videoId
+});
+
+test('getPodcastFresh caches + passes all topic queries as args', async () => {
+  const cache = createCache({ ttlMs: 10_000, now: () => 0 });
+  const seen = [];
+  const run = async (cmd, ...args) => { seen.push([cmd, ...args]); return { shelves: [] }; };
+  await getPodcastFresh(run, cache, ['ai podcast', 'finance podcast']);
+  await getPodcastFresh(run, cache, ['ai podcast', 'finance podcast']);   // cached, no new call
+  assert.deepEqual(seen, [['podcast_fresh', 'ai podcast', 'finance podcast']]);
+});
+
+test('validatePodcastShape: valid podcast_fresh payload returns no problems', () => {
+  const good = { shelves: [{ query: 'ai podcast', shows: [
+    { showId: 'MPSPxyz', title: 'A Show', episodes: [{ videoId: 'abc123', title: 'Ep 1' }] },
+  ] }] };
+  assert.deepEqual(validatePodcastShape('podcast_fresh', good), []);
+});
+
+test('validatePodcastShape: flags podcast_fresh drift', () => {
+  assert.ok(validatePodcastShape('podcast_fresh', {}).length > 0);                                   // no shelves
+  assert.ok(validatePodcastShape('podcast_fresh', { shelves: [] }).length > 0);                      // empty
+  assert.ok(validatePodcastShape('podcast_fresh', { shelves: [{ query: 'q', shows: [] }] }).length > 0); // no shelf has shows
+  assert.ok(validatePodcastShape('podcast_fresh', { shelves: [{ query: 'q', shows: [
+    { showId: 's', title: 't', episodes: [{ title: 'no id' }] },
+  ] }] }).length > 0);                                                                                // episode missing videoId
+  assert.ok(validatePodcastShape('podcast_fresh', { shelves: [{ query: 'q', shows: [
+    { title: 't', episodes: [{ videoId: 'v', title: 'e' }] },
+  ] }] }).length > 0);   // missing showId
 });
