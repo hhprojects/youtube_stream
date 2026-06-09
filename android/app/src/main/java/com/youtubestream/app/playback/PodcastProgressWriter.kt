@@ -21,6 +21,7 @@ class PodcastProgressWriter(
     private var currentMediaId: String? = null
     private var currentIsEpisode = false
     private var lastWrittenMs = 0L
+    private var markedFinished = false   // one-shot: markFinished fires once per episode, not every tick past 95%
 
     fun start() {
         // Re-classify only when the playing item changes (one DB lookup per track change).
@@ -29,6 +30,7 @@ class PodcastProgressWriter(
                 currentMediaId = id
                 currentIsEpisode = id != null && repo.isEpisode(id)
                 lastWrittenMs = 0L
+                markedFinished = false
             }
             .launchIn(scope)
 
@@ -40,7 +42,10 @@ class PodcastProgressWriter(
                 val pos = st.positionMs
                 val dur = st.durationMs
                 if (dur > 0 && pos >= dur * finishFraction) {
-                    scope.launch { repo.markFinished(id) }
+                    if (!markedFinished) {
+                        markedFinished = true
+                        scope.launch { repo.markFinished(id) }
+                    }
                     return@onEach
                 }
                 if (pos - lastWrittenMs >= 5_000 || (pos in 1 until 5_000 && lastWrittenMs == 0L)) {
