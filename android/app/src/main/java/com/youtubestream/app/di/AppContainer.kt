@@ -30,6 +30,9 @@ import com.youtubestream.app.data.settings.DEFAULT_SERVER_URL
 import com.youtubestream.app.data.settings.SettingsDataStore
 import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.playback.PodcastProgressWriter
+import com.youtubestream.app.ui.download.DownloadQueue
+import com.youtubestream.app.ui.download.PodcastDownloads
+import com.youtubestream.app.ui.download.SongDownloads
 import com.youtubestream.app.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -136,6 +139,12 @@ class AppContainer(context: Context) {
         podcastsDir = podcastsDir,
         baseUrl = { currentUrl },
     )
+
+    // Downloads run on an app-lifetime, Main-confined scope so they survive leaving the screen and the
+    // queue bookkeeping stays single-threaded (the repo flows do their blocking IO via flowOn(IO)).
+    private val downloadScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    val songDownloads = SongDownloads(DownloadQueue(downloadScope), downloadRepository)
+    val podcastDownloads = PodcastDownloads(DownloadQueue(downloadScope), podcastRepository)
 
     // Bulk Pi imports run here (app-scoped), so they keep going if the user leaves the Import screen.
     val importDownloadManager = ImportDownloadManager(downloadRepository, appScope)
