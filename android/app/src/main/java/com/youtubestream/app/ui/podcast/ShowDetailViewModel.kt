@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -23,6 +25,7 @@ class ShowDetailViewModel(
     private val repo: PodcastSource,
     private val downloads: PodcastDownloads,
     private val play: (PodcastEpisode) -> Unit,   // same shape PodcastDownloads takes; unified in the screen
+    private val playQueue: (List<PodcastEpisode>, Long) -> Unit,   // multi-episode queue for "Play all"
 ) : ViewModel() {
 
     private val _detail = MutableStateFlow<UiState<PodcastShowDetail>>(UiState.Loading)
@@ -42,6 +45,11 @@ class ShowDetailViewModel(
         combine(_detail, repo.observeDownloadedEpisodes()) { d, local ->
             if (d is UiState.Content) mergeEpisodeRows(d.data.episodes, local) else emptyList()
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** True when this show has ≥1 downloaded episode (drives the Play-all button). */
+    val canPlayAll: StateFlow<Boolean> =
+        rows.map { rs -> rs.any { it.downloaded } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     init { reload() }
 
@@ -67,6 +75,15 @@ class ShowDetailViewModel(
     /** Play an already-downloaded episode by its local id (= filename). The play lambda applies resume. */
     fun onPlayDownloaded(localId: String) {
         viewModelScope.launch { repo.getEpisode(localId)?.let(play) }
+    }
+
+    /** Queue the show's downloaded episodes oldest-first (skip finished, resume the oldest unfinished). */
+    fun playAll() {
+        viewModelScope.launch {
+            val remoteIds = (_detail.value as? UiState.Content)?.data?.episodes?.map { it.videoId } ?: return@launch
+            val q = playAllQueue(remoteIds, repo.observeDownloadedEpisodes().first()) ?: return@launch
+            playQueue(q.episodes, q.startPositionMs)
+        }
     }
 
     /** Delete just the local copy (file + Room row). */

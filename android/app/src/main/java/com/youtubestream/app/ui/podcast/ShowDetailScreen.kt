@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,6 +22,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -71,6 +73,9 @@ fun ShowDetailScreen(
             repo = c.podcastRepository,
             downloads = c.podcastDownloads,
             play = play,
+            playQueue = { eps, startPositionMs ->
+                c.playbackConnection.setQueueAndPlay(eps.map { it.toPlayableTrack() }, 0, startPositionMs)
+            },
         )
     }
 
@@ -78,6 +83,7 @@ fun ShowDetailScreen(
     val rows by vm.rows.collectAsStateWithLifecycle()
     val following by vm.isFollowing.collectAsStateWithLifecycle()
     val downloads by vm.downloadsState.collectAsStateWithLifecycle()
+    val canPlayAll by vm.canPlayAll.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -113,7 +119,17 @@ fun ShowDetailScreen(
                         Text(d.data.title, style = MaterialTheme.typography.titleLarge)
                         d.data.author?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = vm::toggleFollow) { Text(if (following) "Following" else "Follow") }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Button(onClick = vm::toggleFollow) { Text(if (following) "Following" else "Follow") }
+                            if (canPlayAll) {
+                                Spacer(Modifier.width(8.dp))
+                                FilledTonalButton(onClick = vm::playAll) {
+                                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Play all")
+                                }
+                            }
+                        }
                         d.data.description?.takeIf { it.isNotBlank() }?.let {
                             Spacer(Modifier.height(8.dp))
                             Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
