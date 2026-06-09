@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Thin CLI over ytmusicapi (unauthenticated). Prints one JSON object to stdout.
-Usage: python3 discovery.py <trending REGION | related VIDEO_ID | moods | mood PARAMS | genrecharts REGION | playlist PLAYLIST_ID | podcast_search QUERY | podcast SHOW_ID>
+Usage: python3 discovery.py <trending REGION | related VIDEO_ID | moods | mood PARAMS | genrecharts REGION | playlist PLAYLIST_ID | podcast_search QUERY | podcast SHOW_ID | podcast_fresh QUERY...>
 On failure: prints {"error": "..."} to stderr and exits non-zero."""
 import sys
 import json
@@ -131,6 +131,38 @@ def cmd_podcast(yt, show_id):
     }
 
 
+PODCAST_FRESH_SHOWS_PER_TOPIC = 6
+
+
+def cmd_podcast_fresh(yt, queries):
+    # For each topic query: top K shows from search → each show's LATEST episode (episodes[0], reliable
+    # per-show). Per-query and per-show failures degrade to fewer items, never crash the whole command.
+    shelves = []
+    for q in queries:
+        items = []
+        try:
+            results = yt.search(q, filter="podcasts", limit=20) or []
+        except Exception:  # noqa: BLE001
+            results = []
+        shows = [r for r in results if r.get("browseId") and r.get("title")][:PODCAST_FRESH_SHOWS_PER_TOPIC]
+        for s in shows:
+            sid = s.get("browseId")
+            try:
+                pod = yt.get_podcast(sid, limit=5)
+                eps = [e for e in (pod.get("episodes") or []) if e.get("videoId")]
+                if not eps:
+                    continue
+                items.append({
+                    "showId": sid,
+                    "title": s.get("title"),
+                    "episodes": [_to_episode(eps[0])],   # latest only (newest-first → [0])
+                })
+            except Exception:  # noqa: BLE001
+                continue
+        shelves.append({"query": q, "shows": items})
+    return {"shelves": shelves}
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "missing command"}), file=sys.stderr)
@@ -156,6 +188,8 @@ def main():
             out = cmd_podcast_search(yt, sys.argv[2])
         elif cmd == "podcast":
             out = cmd_podcast(yt, sys.argv[2])
+        elif cmd == "podcast_fresh":
+            out = cmd_podcast_fresh(yt, sys.argv[2:])
         else:
             print(json.dumps({"error": f"unknown command {cmd}"}), file=sys.stderr)
             sys.exit(2)
