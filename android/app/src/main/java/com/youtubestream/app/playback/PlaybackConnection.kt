@@ -104,13 +104,16 @@ class PlaybackConnection(
                 playStartGate.onPlayingChanged(player.isPlaying, player.currentMediaItem?.mediaId)
                     ?.let { _playStarts.trySend(it) }
             }
-            // Persist when the queue, the current track, the play state, or the position jumps —
-            // not on the smooth position tick (that fires no event). Debounced to one write.
+            // Persist when the queue, the current track, the play state, the position, or the
+            // shuffle/repeat modes change — not on the smooth position tick (that fires no event).
+            // Debounced to one write.
             if (events.containsAny(
                     Player.EVENT_TIMELINE_CHANGED,
                     Player.EVENT_MEDIA_ITEM_TRANSITION,
                     Player.EVENT_IS_PLAYING_CHANGED,
                     Player.EVENT_POSITION_DISCONTINUITY,
+                    Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                    Player.EVENT_REPEAT_MODE_CHANGED,
                 )
             ) {
                 scheduleSave()
@@ -282,6 +285,8 @@ class PlaybackConnection(
             tracks = currentQueue,
             currentIndex = c.currentMediaItemIndex.coerceIn(0, currentQueue.lastIndex),
             positionMs = c.currentPosition.coerceAtLeast(0L),
+            shuffleEnabled = c.shuffleModeEnabled,
+            repeatMode = RepeatModeMapper.toApp(c.repeatMode),
         )
     }
 
@@ -309,6 +314,10 @@ class PlaybackConnection(
                 // mediaItemCount == 0 guard: a song may have been picked while load() suspended — don't clobber.
                 if (saved != null && saved.tracks.isNotEmpty() && c.mediaItemCount == 0) {
                     currentQueue = saved.tracks
+                    // Re-apply the saved modes before the queue: a fresh ExoPlayer defaults both to
+                    // off, and any queue set afterwards (this restore or a new pick) inherits them.
+                    c.shuffleModeEnabled = saved.shuffleEnabled
+                    c.repeatMode = RepeatModeMapper.toPlayer(saved.repeatMode)
                     val startIndex = saved.currentIndex.coerceIn(0, saved.tracks.lastIndex)
                     c.setMediaItems(
                         saved.tracks.map { it.toMediaItem() },

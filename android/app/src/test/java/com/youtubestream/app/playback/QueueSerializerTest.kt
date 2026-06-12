@@ -17,6 +17,8 @@ class QueueSerializerTest {
         ),
         currentIndex = 1,
         positionMs = 42_000L,
+        shuffleEnabled = true,
+        repeatMode = AppRepeatMode.QUEUE,
     )
 
     @Test
@@ -49,5 +51,13 @@ class QueueSerializerTest {
         assertEquals(0, decoded.currentIndex)
         assertEquals(0L, decoded.positionMs)
         assertNull(decoded.tracks[0].artworkUri)
+    }
+
+    @Test
+    fun `legacy payload without modes decodes with shuffle off and repeat off`() {
+        val legacy = """{"tracks":[],"currentIndex":0,"positionMs":0}"""
+        val decoded = QueueSerializer.decode(legacy)!!
+        assertEquals(false, decoded.shuffleEnabled)
+        assertEquals(AppRepeatMode.OFF, decoded.repeatMode)
     }
 }
