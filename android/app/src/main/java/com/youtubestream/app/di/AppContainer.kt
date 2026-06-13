@@ -8,17 +8,20 @@ import com.youtubestream.app.data.local.MIGRATION_4_5
 import com.youtubestream.app.data.local.MIGRATION_5_6
 import com.youtubestream.app.data.local.MIGRATION_6_7
 import com.youtubestream.app.data.local.MIGRATION_7_8
+import com.youtubestream.app.data.local.MIGRATION_8_9
 import com.youtubestream.app.data.network.ConnectivityObserver
 import com.youtubestream.app.data.network.ServerReachability
 import com.youtubestream.app.data.network.ServerReachabilityInterceptor
 import com.youtubestream.app.data.playback.QueueDataStore
 import com.youtubestream.app.data.remote.BaseUrlInterceptor
 import com.youtubestream.app.data.remote.DiscoveryApi
+import com.youtubestream.app.data.remote.LyricsApi
 import com.youtubestream.app.data.remote.PodcastApi
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.repository.DownloadRepository
 import com.youtubestream.app.data.repository.ImportDownloadManager
 import com.youtubestream.app.data.repository.LibraryRepository
+import com.youtubestream.app.data.repository.LyricsRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.data.repository.PlayHistoryRepository
 import com.youtubestream.app.data.repository.PlaylistRepository
@@ -113,11 +116,12 @@ class AppContainer(context: Context) {
     private val api = buildApi<YoutubeStreamApi>(apiClient)               // search, library, delete — 30s timeout
     private val downloadApi = buildApi<YoutubeStreamApi>(downloadClient)  // the slow yt-dlp POST — 300s timeout
     private val discoveryApi = buildApi<DiscoveryApi>(apiClient)          // cached on the Pi → 30s is plenty
+    private val lyricsApi = buildApi<LyricsApi>(apiClient)                // lrclib proxy on the Pi → 30s is plenty
     private val podcastApi = buildApi<PodcastApi>(apiClient)                       // home/show — cached on Pi
     private val podcastDownloadApi = buildApi<PodcastApi>(podcastDownloadClient)   // the slow episode download POST
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "library.db")
-        .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+        .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
         .fallbackToDestructiveMigration(dropAllTables = true)  // net for unhandled jumps only
         .build()
     private val songsDir = File(context.filesDir, "songs")
@@ -125,6 +129,7 @@ class AppContainer(context: Context) {
 
     val searchRepository = SearchRepository(api)
     val discoveryRepository = DiscoveryRepository(discoveryApi)
+    val lyricsRepository = LyricsRepository(lyricsApi, db.lyricsDao())
     val libraryRepository = LibraryRepository(db.libraryDao())
     val playHistoryRepository = PlayHistoryRepository(db.playEventDao())
     val playlistRepository = PlaylistRepository(db.playlistDao())
