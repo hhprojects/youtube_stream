@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Podcasts
@@ -52,6 +53,7 @@ import com.youtubestream.app.ui.library.LibraryHomeScreen
 import com.youtubestream.app.ui.library.LibraryScreen
 import com.youtubestream.app.ui.player.PlayerSheet
 import com.youtubestream.app.ui.player.rememberPlayerSheetState
+import com.youtubestream.app.ui.podcast.DownloadedEpisodesScreen
 import com.youtubestream.app.ui.podcast.PodcastHomeScreen
 import com.youtubestream.app.ui.podcast.PodcastSearchScreen
 import com.youtubestream.app.ui.podcast.ShowDetailScreen
@@ -76,6 +78,9 @@ private const val SEARCH_ROUTE = "search"
 
 /** Podcast shows-search: a focused page reached from the Podcast tab's app bar — also not a [Dest]. */
 private const val PODCAST_SEARCH_ROUTE = "podcast/search"
+
+/** Manage downloaded episodes: every downloaded episode, reached from the Podcast tab's app bar. */
+private const val PODCAST_DOWNLOADS_ROUTE = "podcast/downloads"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,8 +154,13 @@ fun AppNavHost(
                                 Dest.Home -> IconButton(onClick = { nav.navigate(SEARCH_ROUTE) }) {
                                     Icon(Icons.Filled.Search, contentDescription = "Search")
                                 }
-                                Dest.Podcast -> IconButton(onClick = { nav.navigate(PODCAST_SEARCH_ROUTE) }) {
-                                    Icon(Icons.Filled.Search, contentDescription = "Search podcasts")
+                                Dest.Podcast -> {
+                                    IconButton(onClick = { nav.navigate(PODCAST_SEARCH_ROUTE) }) {
+                                        Icon(Icons.Filled.Search, contentDescription = "Search podcasts")
+                                    }
+                                    IconButton(onClick = { nav.navigate(PODCAST_DOWNLOADS_ROUTE) }) {
+                                        Icon(Icons.Filled.DownloadDone, contentDescription = "Downloaded episodes")
+                                    }
                                 }
                                 else -> {}
                             }
@@ -220,6 +230,9 @@ fun AppNavHost(
                         onBack = { nav.popBackStack() },
                         modifier = Modifier.fillMaxSize(),
                     )
+                }
+                composable(PODCAST_DOWNLOADS_ROUTE) {
+                    DownloadedEpisodesScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize())
                 }
                 composable(Dest.Library.route) {
                     LibraryHomeScreen(
