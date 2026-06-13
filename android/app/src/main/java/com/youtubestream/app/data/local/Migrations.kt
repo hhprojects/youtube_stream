@@ -118,3 +118,18 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         )
     }
 }
+
+/**
+ * v8 → v9: additive. Creates the lyrics cache table without touching any existing table, so installs keep
+ * their library/history/playlists/podcasts. No SQL DEFAULT clauses (a Kotlin field default is not a column
+ * default — Room's identity check would fail), matching MIGRATION_7_8. syncedLrc/plain are nullable.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `lyrics` " +
+                "(`songId` TEXT NOT NULL, `syncedLrc` TEXT, `plain` TEXT, " +
+                "`fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`songId`))",
+        )
+    }
+}
