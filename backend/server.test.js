@@ -199,3 +199,61 @@ test('writeLyricsCache / readLyricsCache round-trip', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('getLyrics returns a cached positive without calling fetch', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lyr-'));
+  const orig = global.fetch;
+  global.fetch = async () => { throw new Error('fetch should not be called'); };
+  try {
+    writeLyricsCache(tmp, 'song.m4a', { synced: '[00:01.00]Hi', plain: null, source: 'lrclib', fetchedAt: Date.now() });
+    const out = await getLyrics(tmp, 'song.m4a', 'Hi', 'Artist', 0);
+    assert.equal(out.synced, '[00:01.00]Hi');
+    assert.equal(out.source, 'lrclib');
+  } finally {
+    global.fetch = orig;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('getLyrics re-queries lrclib on a STALE negative and rewrites the cache', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lyr-'));
+  const orig = global.fetch;
+  // /api/get returns a positive synced result.
+  global.fetch = async (url) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ syncedLyrics: '[00:02.00]Now', plainLyrics: 'Now' }),
+  });
+  try {
+    // A negative cached 30 days ago (older than the 14-day TTL).
+    const stale = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    writeLyricsCache(tmp, 'song.m4a', { synced: null, plain: null, source: null, fetchedAt: stale });
+    const out = await getLyrics(tmp, 'song.m4a', 'Now', 'Artist', 120);
+    assert.equal(out.synced, '[00:02.00]Now');
+    assert.equal(readLyricsCache(tmp, 'song.m4a').synced, '[00:02.00]Now');
+  } finally {
+    global.fetch = orig;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('getLyrics writes a negative on a genuine miss (get 404 + search empty)', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lyr-'));
+  const orig = global.fetch;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('/api/get')) return { ok: false, status: 404, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => [] };   // /api/search → no candidates
+  };
+  try {
+    const out = await getLyrics(tmp, 'song.m4a', 'Nope', 'Artist', 0);
+    assert.equal(out.synced, null);
+    assert.equal(out.plain, null);
+    const cached = readLyricsCache(tmp, 'song.m4a');
+    assert.equal(cached.synced, null);
+    assert.equal(typeof cached.fetchedAt, 'number');   // negative was persisted
+  } finally {
+    global.fetch = orig;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

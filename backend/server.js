@@ -189,6 +189,56 @@ function cleanTrackTitle(title) {
     .trim();
 }
 
+// Query lrclib: exact /api/get first, then /api/search picking the closest-duration candidate.
+// Throws if lrclib is unreachable (the route turns that into a 502 so the client doesn't cache a negative).
+async function fetchFromLrclib(title, artist, durationSec) {
+  const track = cleanTrackTitle(title);
+  const headers = { 'User-Agent': LRCLIB_UA };
+
+  const getUrl = new URL(`${LRCLIB_BASE}/api/get`);
+  getUrl.searchParams.set('track_name', track);
+  if (artist) getUrl.searchParams.set('artist_name', artist);
+  if (durationSec > 0) getUrl.searchParams.set('duration', String(durationSec));
+  const getRes = await fetch(getUrl, { headers });
+  if (getRes.ok) {
+    const j = await getRes.json();
+    return { synced: j.syncedLyrics || null, plain: j.plainLyrics || null };
+  }
+
+  // lrclib answers 404 on an exact miss — fall back to fuzzy search.
+  const searchUrl = new URL(`${LRCLIB_BASE}/api/search`);
+  searchUrl.searchParams.set('track_name', track);
+  if (artist) searchUrl.searchParams.set('artist_name', artist);
+  const searchRes = await fetch(searchUrl, { headers });
+  if (!searchRes.ok) return { synced: null, plain: null };
+  const arr = await searchRes.json();
+  if (!Array.isArray(arr) || arr.length === 0) return { synced: null, plain: null };
+  let best = arr[0];
+  if (durationSec > 0) {
+    best = arr.reduce(
+      (a, b) => (Math.abs((b.duration || 0) - durationSec) < Math.abs((a.duration || 0) - durationSec) ? b : a),
+      arr[0],
+    );
+  }
+  return { synced: best.syncedLyrics || null, plain: best.plainLyrics || null };
+}
+
+// Cache-aware lyrics lookup. Positives cache forever; negatives are re-queried after LYRICS_TTL_MS.
+async function getLyrics(dir, filename, title, artist, durationSec) {
+  const cached = readLyricsCache(dir, filename);
+  if (cached) {
+    const isNegative = !cached.synced && !cached.plain;
+    const fresh = typeof cached.fetchedAt === 'number' && (Date.now() - cached.fetchedAt) < LYRICS_TTL_MS;
+    if (!isNegative || fresh) {
+      return { synced: cached.synced || null, plain: cached.plain || null, source: cached.source || null };
+    }
+  }
+  const got = await fetchFromLrclib(title, artist, durationSec);   // may throw (network) → propagates
+  const source = (got.synced || got.plain) ? 'lrclib' : null;
+  writeLyricsCache(dir, filename, { synced: got.synced, plain: got.plain, source, fetchedAt: Date.now() });
+  return { synced: got.synced, plain: got.plain, source };
+}
+
 // Back-compat thin wrappers (existing callers/tests).
 function readVideoId(dir, audioFile) {
   const sc = readSidecar(dir, audioFile);
@@ -519,4 +569,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache };
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, fetchFromLrclib, getLyrics };
