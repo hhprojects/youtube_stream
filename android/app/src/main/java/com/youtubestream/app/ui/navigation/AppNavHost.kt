@@ -131,9 +131,6 @@ fun AppNavHost(
         }
     }
 
-    // System/predictive back collapses the expanded player instead of leaving the app.
-    BackHandler(enabled = sheet.isExpanded) { scope.launch { sheet.collapse() } }
-
     Box(Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
@@ -290,6 +287,14 @@ fun AppNavHost(
                     )
                 }
             }
+
+            // System/predictive Back minimizes the expanded player. It MUST sit inside the Scaffold
+            // content, after the NavHost: nav-compose registers NavController's PredictiveBackHandler
+            // here, and the Scaffold content is a SubcomposeLayout — so a handler placed out at the
+            // shell level registers earlier and loses the dispatcher's last-registered-wins race (it
+            // would pop the screen under the sheet instead of minimizing). Same subcomposition, after
+            // the NavHost ⇒ registered last ⇒ wins. Proven by SheetBackPriorityTest.
+            BackHandler(enabled = sheet.isExpanded) { scope.launch { sheet.collapse() } }
         }
 
         if (!onSearch) {
