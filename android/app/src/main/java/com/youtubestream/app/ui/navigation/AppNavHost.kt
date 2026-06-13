@@ -190,7 +190,9 @@ fun AppNavHost(
             NavHost(nav, startDestination = Dest.Home.route, modifier = Modifier.padding(padding).padding(bottom = if (miniBarVisible && !onSearch) peekHeight else 0.dp)) {
                 composable(Dest.Home.route) {
                     HomeScreen(
-                        onOpenMood = { key -> nav.navigate("mood?key=" + android.net.Uri.encode(key)) },
+                        onOpenMood = { key, title ->
+                            nav.navigate("mood?key=" + android.net.Uri.encode(key) + "&title=" + android.net.Uri.encode(title))
+                        },
                         onOpenGenre = { id, title ->
                             nav.navigate("genre?id=" + android.net.Uri.encode(id) + "&title=" + android.net.Uri.encode(title))
                         },
@@ -256,13 +258,17 @@ fun AppNavHost(
                 }
                 composable("import") { ImportScreen(onBack = { nav.popBackStack() }, modifier = Modifier.fillMaxSize()) }
                 composable(
-                    "mood?key={key}",
-                    arguments = listOf(navArgument("key") { type = NavType.StringType; defaultValue = "" }),
+                    "mood?key={key}&title={title}",
+                    arguments = listOf(
+                        navArgument("key") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                    ),
                 ) { entry ->
                     val key = entry.arguments?.getString("key").orEmpty()
                     DiscoveryListScreen(
                         load = { it.moodSongs(key) },
                         fallbackTitle = "Mood",
+                        titleOverride = entry.arguments?.getString("title")?.takeIf { it.isNotBlank() },
                         onBack = { nav.popBackStack() },
                         modifier = Modifier.fillMaxSize(),
                     )

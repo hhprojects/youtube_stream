@@ -26,7 +26,7 @@ fun LazyListScope.discoverSection(
     state: DiscoverUiState,
     downloadingKeys: Set<String>,
     onSongClick: (DiscoverySong) -> Unit,
-    onOpenMood: (String) -> Unit,
+    onOpenMood: (String, String) -> Unit,
     onOpenGenre: (key: String, title: String) -> Unit,
 ) {
     when (state) {
@@ -53,7 +53,7 @@ fun LazyListScope.discoverSection(
             }
             c.moods?.let { cats ->
                 item(key = "discover-moods") {
-                    ChipRow("Moods & genres", cats.map { it.key to it.title }) { key, _ -> onOpenMood(key) }
+                    ChipRow("Moods & genres", cats.map { it.key to it.title }) { key, label -> onOpenMood(key, label) }
                 }
             }
             c.genreCharts?.let { charts ->
