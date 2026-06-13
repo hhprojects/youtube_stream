@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,6 +92,9 @@ fun ShowDetailScreen(
     }
 
     var pendingDelete by remember { mutableStateOf<EpisodeRowUi?>(null) }
+    var sort by remember { mutableStateOf(EpisodeSort.NEWEST) }
+    var unplayedOnly by remember { mutableStateOf(false) }
+    val displayedRows = remember(rows, sort, unplayedOnly) { applyEpisodeView(rows, sort, unplayedOnly) }
 
     Scaffold(
         modifier = modifier,
@@ -137,10 +141,28 @@ fun ShowDetailScreen(
                         Spacer(Modifier.height(16.dp))
                     }
                 }
-                items(rows, key = { it.videoId }) { row ->
+                if (rows.isNotEmpty()) {
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = {
+                                sort = if (sort == EpisodeSort.NEWEST) EpisodeSort.OLDEST else EpisodeSort.NEWEST
+                            }) {
+                                Text(if (sort == EpisodeSort.NEWEST) "Newest first" else "Oldest first")
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            FilterChip(
+                                selected = unplayedOnly,
+                                onClick = { unplayedOnly = !unplayedOnly },
+                                label = { Text("Unplayed") },
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+                items(displayedRows, key = { it.videoId }) { row ->
                     SongRow(
                         title = row.title,
-                        artist = "",
+                        artist = episodeSubtitle(row),
                         artworkUrl = row.artworkUrl,
                         onClick = {
                             if (row.downloaded) row.localId?.let(vm::onPlayDownloaded) else vm.onDownload(row.videoId)
