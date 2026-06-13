@@ -21,6 +21,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,12 @@ import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.ui.components.MiniPlayer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+/** ≥ this downward fling (dp/s; density-converted at use) minimizes the player regardless of drag distance. */
+private const val MINIMIZE_VELOCITY_DPS = 200f
+
+/** Gentle release (no decisive flick): collapse once dragged down past ~20% from fully expanded. */
+private const val MINIMIZE_POSITIONAL_THRESHOLD = 0.8f
 
 /**
  * Docked player that lives above the nav bar (collapsed) and grows to full screen (expanded).
@@ -43,13 +50,16 @@ fun PlayerSheet(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    // dp/s → px/s shares the same density factor as dp → px, so converting the dp constant yields the px/s threshold.
+    val density = LocalDensity.current
+    val minimizeVelocityPx = remember(density) { with(density) { MINIMIZE_VELOCITY_DPS.dp.toPx() } }
     val progress = sheet.progress
 
     // Bridge the expanded player's list scroll with the sheet drag:
     //  - while the sheet sits between anchors, it owns the vertical drag (don't scroll the list)
     //  - fully expanded + list at top + dragging down → leftover lands here and starts the collapse
     //  - on release, snap to the nearer anchor by progress.
-    val nested = remember(sheet) {
+    val nested = remember(sheet, minimizeVelocityPx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 val o = sheet.draggable.offset
@@ -71,7 +81,12 @@ fun PlayerSheet(
             override suspend fun onPreFling(available: Velocity): Velocity {
                 val o = sheet.draggable.offset
                 if (!o.isNaN() && o > 0f) {
-                    if (sheet.progress > 0.5f) sheet.expand() else sheet.collapse()
+                    // available.y > 0 = downward (toward collapse), matching onPostScroll's convention.
+                    if (shouldCollapse(sheet.progress, available.y, minimizeVelocityPx, MINIMIZE_POSITIONAL_THRESHOLD)) {
+                        sheet.collapse()
+                    } else {
+                        sheet.expand()
+                    }
                     return available
                 }
                 return Velocity.Zero
