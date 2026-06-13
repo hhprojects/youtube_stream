@@ -1,5 +1,6 @@
 package com.youtubestream.app.ui.playlist
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,6 +84,10 @@ fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: M
     // The playlist was deleted (here or elsewhere) → leave the detail page. (Smart sources never close.)
     LaunchedEffect(closed) { if (closed) onBack() }
     BackHandler(enabled = selection.active) { vm.exitSelection() }
+
+    // Surface edit failures (rename/delete/reorder/cover/remove) that were previously swallowed.
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { vm.errors.collect { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }
 
     val content = state as? UiState.Content
 

@@ -10,7 +10,9 @@ import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.library.toPlayableTrack
 import com.youtubestream.app.ui.selection.SelectionState
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -50,6 +52,22 @@ class PlaylistDetailViewModel(
     private val _selection = MutableStateFlow(SelectionState())
     /** Multi-select state (manual playlists only); the screen renders it and drives the toggles. */
     val selection: StateFlow<SelectionState> = _selection
+
+    // One-shot edit failures (rename/delete/reorder/cover/remove). The screen Toasts these — without it
+    // every edit op was fire-and-forget and a failure (e.g. a Pi-backed cover write) vanished silently.
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val errors: SharedFlow<String> = _errors
+
+    /** Run an edit op, surfacing any failure as a one-shot error instead of swallowing it. */
+    private fun edit(failMessage: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                _errors.tryEmit(e.message ?: failMessage)
+            }
+        }
+    }
 
     private val songs: Flow<List<LibrarySong>> = when (source) {
         is PlaylistSource.Manual -> playlists.observeSongs(source.id)
@@ -96,17 +114,17 @@ class PlaylistDetailViewModel(
         val id = manualId ?: return
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
-        viewModelScope.launch { playlists.rename(id, trimmed, now()) }
+        edit("Couldn't rename the playlist") { playlists.rename(id, trimmed, now()) }
     }
 
     fun delete() {
         val id = manualId ?: return
-        viewModelScope.launch { playlists.delete(id) }
+        edit("Couldn't delete the playlist") { playlists.delete(id) }
     }
 
     fun removeSong(songId: String) {
         val id = manualId ?: return
-        viewModelScope.launch { playlists.removeSong(id, songId) }
+        edit("Couldn't remove the song") { playlists.removeSong(id, songId) }
     }
 
     fun enterSelection(initialId: String? = null) = _selection.update { it.enter(initialId) }
@@ -119,7 +137,7 @@ class PlaylistDetailViewModel(
         val id = manualId ?: return
         val ids = _selection.value.selectedIds.toList()
         if (ids.isEmpty()) return
-        viewModelScope.launch {
+        edit("Couldn't remove the songs") {
             playlists.removeSongs(id, ids)
             _selection.value = SelectionState()
         }
@@ -128,12 +146,12 @@ class PlaylistDetailViewModel(
     /** Persist a drag-reordered order. [orderedSongIds] comes from PlaylistReorder.reorder(...). */
     fun reorder(orderedSongIds: List<String>) {
         val id = manualId ?: return
-        viewModelScope.launch { playlists.setOrder(id, orderedSongIds) }
+        edit("Couldn't save the new order") { playlists.setOrder(id, orderedSongIds) }
     }
 
     /** Set a custom cover (a pasted image URL), or null to fall back to the auto first-song art. */
     fun setCover(url: String?) {
         val id = manualId ?: return
-        viewModelScope.launch { playlists.setCover(id, url, now()) }
+        edit("Couldn't update the cover") { playlists.setCover(id, url, now()) }
     }
 }
