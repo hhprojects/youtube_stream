@@ -13,4 +13,5 @@ class PodcastDownloads(val queue: DownloadQueue, private val repo: PodcastSource
         queue.enqueue(episode.videoId, episode.title) { repo.downloadEpisode(show, episode).toItemDownload() }
 
     fun cancel(videoId: String) = queue.cancel(videoId)
+    fun retry(videoId: String) = queue.retry(videoId)
 }

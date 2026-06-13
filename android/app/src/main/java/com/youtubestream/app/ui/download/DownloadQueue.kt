@@ -36,11 +36,14 @@ class DownloadQueue(private val scope: CoroutineScope) {
 
     private val titles = ConcurrentHashMap<String, String>()
     private val jobs = ConcurrentHashMap<String, Job>()
+    // The work thunk per key, retained so a Failed download can be re-run via [retry] (cleared on success/cancel).
+    private val works = ConcurrentHashMap<String, () -> Flow<ItemDownload>>()
     private val mutex = Mutex()  // fair → first-enqueued-first-served
 
     private fun refreshActive() {
         _active.value = _downloads.value.entries
-            .filter { it.value is ItemDownload.Queued || it.value is ItemDownload.Downloading }
+            // Failed is included so the indicator surfaces failures (with Retry), not just in-flight items.
+            .filter { it.value is ItemDownload.Queued || it.value is ItemDownload.Downloading || it.value is ItemDownload.Failed }
             .map { ActiveDownload(it.key, titles[it.key] ?: it.key, it.value) }
     }
 
@@ -51,6 +54,7 @@ class DownloadQueue(private val scope: CoroutineScope) {
 
     private fun remove(key: String) {
         titles.remove(key)
+        works.remove(key)
         _downloads.update { it - key }
         refreshActive()
     }
@@ -68,6 +72,7 @@ class DownloadQueue(private val scope: CoroutineScope) {
         }
         if (!accepted) return
         titles[key] = title
+        works[key] = work
         refreshActive()
         jobs[key] = scope.launch {
             try {
@@ -91,5 +96,12 @@ class DownloadQueue(private val scope: CoroutineScope) {
     fun cancel(key: String) {
         jobs.remove(key)?.cancel()
         remove(key)
+    }
+
+    /** Re-run a previously-failed download using its retained work thunk. No-op if the key is unknown
+     *  (e.g. called on the queue that doesn't own this key, mirroring [cancel]). */
+    fun retry(key: String) {
+        val work = works[key] ?: return
+        enqueue(key, titles[key] ?: key, work)   // Failed isn't Queued/Downloading, so enqueue re-accepts it
     }
 }

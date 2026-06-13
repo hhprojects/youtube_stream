@@ -14,4 +14,5 @@ class SongDownloads(val queue: DownloadQueue, private val downloader: Downloader
     fun enqueue(result: SearchResult) = enqueue(result.id, result.title, result.thumbnailUrl)
 
     fun cancel(id: String) = queue.cancel(id)
+    fun retry(id: String) = queue.retry(id)
 }
