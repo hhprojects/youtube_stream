@@ -90,6 +90,10 @@ fun PlayerScreen(
     var addingToId by remember { mutableStateOf<String?>(null) }   // current track's id, pending add-to-playlist
     var sleepDialogOpen by remember { mutableStateOf(false) }
     val sleepActive = state.sleepTimerEndsAtMs != null || state.sleepAtTrackEnd
+    // Up-next is the queue in TIMELINE order after the current item. Media3 doesn't expose the shuffle
+    // permutation (see WidgetModel's same caveat), so with shuffle ON this list is timeline order, not the
+    // true play order. The interactive ops below are all self-consistent with these shown rows: tapping a
+    // row jumps to that timeline item, ✕ removes it, and Clear empties exactly this [current+1, end) range.
     val upNext = state.queue.drop(state.currentIndex + 1)
 
     // Solid base so the sheet is never see-through: songs without artwork show this surface; songs with

@@ -69,6 +69,9 @@ fun AddToPlaylistSheet(songIds: List<String>, onDismiss: () -> Unit) {
                     title = playlist.name,
                     subtitle = "${playlist.songCount} songs",
                 ) {
+                    // Optimistic confirmation: add() is a local Room "INSERT OR IGNORE" (effectively
+                    // infallible) and the nav-scoped VM completes the write even after the sheet dismisses,
+                    // so toasting before the coroutine finishes is safe here.
                     vm.add(playlist.id, songIds)
                     Toast.makeText(context, "Added to ${playlist.name}", Toast.LENGTH_SHORT).show()
                     onDismiss()
