@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -41,12 +42,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,12 +66,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.youtubestream.app.lyrics.SongRef
 import com.youtubestream.app.playback.AppRepeatMode
 import com.youtubestream.app.playback.formatSpeed
 import com.youtubestream.app.playback.nextPlaybackSpeed
 import com.youtubestream.app.playback.PlaybackConnection
 import com.youtubestream.app.playback.PlayerUiState
 import com.youtubestream.app.playback.QueueItem
+import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
 
 @Composable
@@ -96,6 +101,19 @@ fun PlayerScreen(
     // row jumps to that timeline item, ✕ removes it, and Clear empties exactly this [current+1, end) range.
     val upNext = state.queue.drop(state.currentIndex + 1)
 
+    var showLyrics by remember { mutableStateOf(false) }
+    // Lyrics are songs-only; currentMediaId is non-null here (guarded by the early return above).
+    val canShowLyrics = !state.isPodcast
+    val lyricsVm = appViewModel { c -> LyricsViewModel(c.lyricsRepository) }
+    val lyrics by lyricsVm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(state.currentMediaId, state.isPodcast, state.title, state.artist) {
+        val id = state.currentMediaId
+        if (id != null && !state.isPodcast) {
+            lyricsVm.load(SongRef(id, state.title, state.artist, state.durationMs))
+        }
+    }
+    val lyricsMode = showLyrics && canShowLyrics
+
     // Solid base so the sheet is never see-through: songs without artwork show this surface; songs with
     // art show the blurred backdrop (opaque) on top of it. A Surface (not a bare Box) is essential here:
     // it sets LocalContentColor to onSurface, so the un-tinted Text/Icons below stay visible in dark mode.
@@ -106,42 +124,66 @@ fun PlayerScreen(
         // Immersive backdrop: the current art, blown up + blurred, tinted by a scrim for legibility.
         ArtBackdrop(state.artworkUri)
 
-        LazyColumn(
-            // systemBarsPadding keeps content (chevron, art, controls, queue) inside the safe area —
-            // the ArtBackdrop above stays full-bleed under the status/nav bars for the immersive look.
-            modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
+        if (lyricsMode) {
+            // Bounded Column: lyrics own their scroll (weight(1f)); transport stays pinned below. A
+            // scrolling LazyColumn nested in the outer LazyColumn item would crash (infinite max height).
+            Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp)) {
                 PlayerHeader(
                     onMinimize = onMinimize,
                     onStop = onStop,
                     onAddToPlaylist = { state.currentMediaId?.let { addingToId = it } },
                     sleepActive = sleepActive,
                     onSleepTimer = { sleepDialogOpen = true },
+                    canShowLyrics = canShowLyrics,
+                    showLyrics = true,
+                    onToggleLyrics = { showLyrics = it },
                 )
+                LyricsView(lyrics, state.positionMs, Modifier.weight(1f))
+                TrackInfo(state.title, state.artist)
+                Scrubber(state) { ms -> connection.seekTo(ms) }
+                Controls(state, connection)
             }
-            item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
-            item { TrackInfo(state.title, state.artist) }
-            item { Scrubber(state) { ms -> connection.seekTo(ms) } }
-            item { Controls(state, connection) }
-            item {
-                UpNextHeader(
-                    count = upNext.size,
-                    expanded = expanded,
-                    onToggle = { expanded = !expanded },
-                    onClear = { connection.clearUpNext() },
-                )
-            }
-            if (expanded) {
-                itemsIndexed(upNext, key = { _, it -> it.mediaId }) { i, item ->
-                    // upNext drops the current + earlier items, so the absolute timeline index is offset.
-                    val absoluteIndex = state.currentIndex + 1 + i
-                    UpNextRow(
-                        item = item,
-                        onPlay = { connection.playQueueItem(absoluteIndex) },
-                        onRemove = { connection.removeQueueItem(absoluteIndex) },
+        } else {
+            LazyColumn(
+                // systemBarsPadding keeps content (chevron, art, controls, queue) inside the safe area —
+                // the ArtBackdrop above stays full-bleed under the status/nav bars for the immersive look.
+                modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item {
+                    PlayerHeader(
+                        onMinimize = onMinimize,
+                        onStop = onStop,
+                        onAddToPlaylist = { state.currentMediaId?.let { addingToId = it } },
+                        sleepActive = sleepActive,
+                        onSleepTimer = { sleepDialogOpen = true },
+                        canShowLyrics = canShowLyrics,
+                        showLyrics = false,
+                        onToggleLyrics = { showLyrics = it },
                     )
+                }
+                item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
+                item { TrackInfo(state.title, state.artist) }
+                item { Scrubber(state) { ms -> connection.seekTo(ms) } }
+                item { Controls(state, connection) }
+                item {
+                    UpNextHeader(
+                        count = upNext.size,
+                        expanded = expanded,
+                        onToggle = { expanded = !expanded },
+                        onClear = { connection.clearUpNext() },
+                    )
+                }
+                if (expanded) {
+                    itemsIndexed(upNext, key = { _, it -> it.mediaId }) { i, item ->
+                        // upNext drops the current + earlier items, so the absolute timeline index is offset.
+                        val absoluteIndex = state.currentIndex + 1 + i
+                        UpNextRow(
+                            item = item,
+                            onPlay = { connection.playQueueItem(absoluteIndex) },
+                            onRemove = { connection.removeQueueItem(absoluteIndex) },
+                        )
+                    }
                 }
             }
         }
@@ -156,7 +198,7 @@ fun PlayerScreen(
     }
 }
 
-/** Header for the expanded player: minimize chevron (left) + overflow ⋮ with Add-to-playlist / Sleep / Stop. */
+/** Header for the expanded player: minimize chevron (left) + a songs-only Art/Lyrics toggle + overflow ⋮. */
 @Composable
 private fun PlayerHeader(
     onMinimize: () -> Unit,
@@ -164,6 +206,9 @@ private fun PlayerHeader(
     onAddToPlaylist: () -> Unit,
     sleepActive: Boolean,
     onSleepTimer: () -> Unit,
+    canShowLyrics: Boolean,
+    showLyrics: Boolean,
+    onToggleLyrics: (Boolean) -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(
@@ -174,6 +219,16 @@ private fun PlayerHeader(
             Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Minimize")
         }
         Spacer(Modifier.weight(1f))
+        if (canShowLyrics) {
+            IconToggleButton(checked = showLyrics, onCheckedChange = onToggleLyrics) {
+                Icon(
+                    Icons.Filled.Lyrics,
+                    contentDescription = if (showLyrics) "Show artwork" else "Show lyrics",
+                    tint = if (showLyrics) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Box {
             IconButton(onClick = { menuOpen = true }) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "More")
