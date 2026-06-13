@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor } = require('./server');
+const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, getLyrics } = require('./server');
 
 test('YOUTUBE_ID_REGEX accepts standard ids', () => {
   assert.ok(YOUTUBE_ID_REGEX.test('dQw4w9WgXcQ'));
@@ -171,6 +171,30 @@ test('libraryRowFor prefers sidecar title/artist/videoId, falls back to the file
     const noSc = libraryRowFor(tmp, 'Some_Old_File.m4a');
     assert.equal(noSc.artist, 'Unknown');
     assert.equal(noSc.videoId, null);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('cleanTrackTitle strips official/video/lyrics noise and feat tails', () => {
+  assert.equal(cleanTrackTitle('Circles (Official Video)'), 'Circles');
+  assert.equal(cleanTrackTitle('Circles [Official Audio]'), 'Circles');
+  assert.equal(cleanTrackTitle('Circles (Lyrics)'), 'Circles');
+  assert.equal(cleanTrackTitle('Sunflower feat. Someone'), 'Sunflower');
+  assert.equal(cleanTrackTitle('Plain Title'), 'Plain Title');
+});
+
+test('lyricsPathFor swaps the audio extension for .lyrics.json', () => {
+  assert.equal(lyricsPathFor('/d', 'a b.m4a'), path.join('/d', 'a b.lyrics.json'));
+  assert.equal(lyricsPathFor('/d', 'x.mp3'), path.join('/d', 'x.lyrics.json'));
+});
+
+test('writeLyricsCache / readLyricsCache round-trip', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lyr-'));
+  try {
+    writeLyricsCache(tmp, 'song.m4a', { synced: '[00:01.00]Hi', plain: null, source: 'lrclib', fetchedAt: 123 });
+    assert.deepEqual(readLyricsCache(tmp, 'song.m4a'), { synced: '[00:01.00]Hi', plain: null, source: 'lrclib', fetchedAt: 123 });
+    assert.equal(readLyricsCache(tmp, 'missing.m4a'), null);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

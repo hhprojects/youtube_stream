@@ -155,6 +155,40 @@ function writeSidecar(dir, audioFile, data) {
   fs.writeFileSync(sidecarPathFor(dir, audioFile), JSON.stringify(data));
 }
 
+// --- Lyrics (lrclib proxy + per-file cache) ---
+
+const LYRICS_TTL_MS = Number(process.env.LYRICS_TTL_MS) || 14 * 24 * 60 * 60 * 1000;
+const LRCLIB_BASE = 'https://lrclib.net';
+// lrclib asks clients to send a descriptive User-Agent identifying the app.
+const LRCLIB_UA = 'YoutubeStream/1.0 (self-hosted music player)';
+
+function lyricsPathFor(dir, audioFile) {
+  return path.join(dir, audioFile.replace(/\.(m4a|mp3)$/i, '.lyrics.json'));
+}
+
+function readLyricsCache(dir, audioFile) {
+  try {
+    const p = lyricsPathFor(dir, audioFile);
+    if (!fs.existsSync(p)) return null;
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeLyricsCache(dir, audioFile, data) {
+  try { fs.writeFileSync(lyricsPathFor(dir, audioFile), JSON.stringify(data)); } catch {}
+}
+
+// Strip common YouTube title noise so lrclib's exact match has a clean track name.
+function cleanTrackTitle(title) {
+  return String(title || '')
+    .replace(/[([][^)\]]*\b(official|video|audio|lyrics?|visualizer|hd|4k|mv|remaster(ed)?)\b[^)\]]*[)\]]/gi, '')
+    .replace(/\b(feat\.?|ft\.?)\s.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Back-compat thin wrappers (existing callers/tests).
 function readVideoId(dir, audioFile) {
   const sc = readSidecar(dir, audioFile);
@@ -485,4 +519,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor };
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache };
