@@ -66,6 +66,11 @@ class PlaybackConnection(
     /** Debounces queue/position writes so a burst of player events collapses into one save. */
     private var saveJob: Job? = null
 
+    /** Sleep timer: a pending timed-pause job, the wall-clock it fires at, and the end-of-track flag. */
+    private var sleepJob: Job? = null
+    private var sleepEndsAtMs: Long? = null
+    private var sleepAtTrackEnd = false
+
     /** One-slot deferred command (a widget tap that arrived before connect finished) + its callback. */
     private var pendingAction: (PlaybackController.() -> Unit)? = null
     private var pendingOnApplied: (() -> Unit)? = null
@@ -91,6 +96,14 @@ class PlaybackConnection(
     }
 
     private val playerListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // End-of-track sleep: pause when a track finishes on its own (auto-advance), not on a manual skip.
+            if (sleepAtTrackEnd && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                sleepAtTrackEnd = false
+                controller?.pause()   // onEvents → pushState clears the flag in the UI
+            }
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             pushState()
             // Record a real track-start into play-history (For You). The pure PlayStartGate decides
@@ -190,6 +203,8 @@ class PlaybackConnection(
             currentIndex = c.currentMediaItemIndex,
             playbackSpeed = c.playbackParameters.speed,
             isPodcast = currentQueue.getOrNull(c.currentMediaItemIndex)?.isPodcast == true,
+            sleepTimerEndsAtMs = sleepEndsAtMs,
+            sleepAtTrackEnd = sleepAtTrackEnd,
         )
     }
 
@@ -234,11 +249,81 @@ class PlaybackConnection(
         c.seekTo(target)
     }
 
+    // --- Queue editing. Each keeps `currentQueue` aligned with the controller's timeline; the
+    // resulting timeline/transition events drive pushState + a debounced save automatically. ---
+
+    override fun playQueueItem(index: Int) {
+        val c = controller ?: return
+        if (index in 0 until c.mediaItemCount) {
+            c.seekToDefaultPosition(index)
+            c.play()
+        }
+    }
+
+    override fun moveQueueItem(from: Int, to: Int) {
+        val c = controller ?: return
+        val count = c.mediaItemCount
+        if (from in 0 until count && to in 0 until count && from != to) {
+            c.moveMediaItem(from, to)
+            currentQueue = currentQueue.toMutableList().apply { add(to, removeAt(from)) }
+        }
+    }
+
+    override fun removeQueueItem(index: Int) {
+        val c = controller ?: return
+        if (index in 0 until c.mediaItemCount) {
+            c.removeMediaItem(index)
+            dropFromCurrentQueue(index)
+        }
+    }
+
+    override fun clearUpNext() {
+        val c = controller ?: return
+        val from = c.currentMediaItemIndex + 1
+        if (from in 1 until c.mediaItemCount) {
+            c.removeMediaItems(from, c.mediaItemCount)
+            currentQueue = currentQueue.take(from)
+        }
+    }
+
+    // --- Sleep timer ---
+
+    override fun setSleepTimer(durationMs: Long) {
+        sleepJob?.cancel()
+        sleepAtTrackEnd = false
+        sleepEndsAtMs = System.currentTimeMillis() + durationMs
+        sleepJob = scope.launch {
+            delay(durationMs)
+            controller?.pause()
+            sleepEndsAtMs = null
+            sleepJob = null
+            pushState()
+        }
+        pushState()
+    }
+
+    override fun setSleepTimerEndOfTrack() {
+        sleepJob?.cancel()
+        sleepJob = null
+        sleepEndsAtMs = null
+        sleepAtTrackEnd = true
+        pushState()
+    }
+
+    override fun cancelSleepTimer() {
+        sleepJob?.cancel()
+        sleepJob = null
+        sleepEndsAtMs = null
+        sleepAtTrackEnd = false
+        pushState()
+    }
+
     override fun stop() {
         val c = controller ?: return
         c.stop()                                  // halt playback
         c.clearMediaItems()                       // empty the timeline → currentMediaItem becomes null
         currentQueue = emptyList()                // keep our URI list aligned with the controller
+        sleepJob?.cancel(); sleepJob = null; sleepEndsAtMs = null; sleepAtTrackEnd = false
         saveJob?.cancel()                         // cancel any debounced save the clear events would trigger
         scope.launch { queueStore.clear() }       // forget the persisted session on disk
         pushState()                               // emit the idle state now (don't wait for an event)

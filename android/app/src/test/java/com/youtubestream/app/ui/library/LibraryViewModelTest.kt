@@ -63,6 +63,13 @@ class LibraryViewModelTest {
         override fun cycleRepeat() {}
         override fun setSpeed(speed: Float) {}
         override fun seekBy(deltaMs: Long) {}
+        override fun playQueueItem(index: Int) {}
+        override fun moveQueueItem(from: Int, to: Int) {}
+        override fun removeQueueItem(index: Int) {}
+        override fun clearUpNext() {}
+        override fun setSleepTimer(durationMs: Long) {}
+        override fun setSleepTimerEndOfTrack() {}
+        override fun cancelSleepTimer() {}
         override fun stop() {}
     }
 

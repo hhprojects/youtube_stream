@@ -20,6 +20,24 @@ interface PlaybackController {
     /** Seek relative to the current position, clamped to [0, duration]. Used by podcast skip ±. */
     fun seekBy(deltaMs: Long)
 
+    // --- Queue editing (absolute timeline indices) ---
+    /** Jump playback to the queue item at [index] and play it. */
+    fun playQueueItem(index: Int)
+    /** Reorder: move the queue item at [from] to [to]. */
+    fun moveQueueItem(from: Int, to: Int)
+    /** Remove the queue item at [index]. */
+    fun removeQueueItem(index: Int)
+    /** Clear the up-next list (everything after the current item); the current track keeps playing. */
+    fun clearUpNext()
+
+    // --- Sleep timer ---
+    /** Pause playback after [durationMs] from now. Replaces any existing timer. */
+    fun setSleepTimer(durationMs: Long)
+    /** Pause playback when the current track finishes. Replaces any existing timer. */
+    fun setSleepTimerEndOfTrack()
+    /** Cancel any pending sleep timer. */
+    fun cancelSleepTimer()
+
     /** Stop playback and clear the queue — the now-playing UI hides (currentMediaId → null). */
     fun stop()
 }

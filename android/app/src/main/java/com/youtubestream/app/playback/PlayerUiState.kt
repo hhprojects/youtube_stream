@@ -25,4 +25,6 @@ data class PlayerUiState(
     val currentIndex: Int = 0,
     val playbackSpeed: Float = 1f,
     val isPodcast: Boolean = false,
+    val sleepTimerEndsAtMs: Long? = null,   // wall-clock target of a timed sleep; null when none is set
+    val sleepAtTrackEnd: Boolean = false,   // pause when the current track finishes
 )

@@ -21,6 +21,13 @@ private class RecordingController : PlaybackController {
     override fun cycleRepeat() { calls += "cycleRepeat" }
     override fun setSpeed(speed: Float) { calls += "setSpeed" }
     override fun seekBy(deltaMs: Long) { calls += "seekBy" }
+    override fun playQueueItem(index: Int) { calls += "playQueueItem" }
+    override fun moveQueueItem(from: Int, to: Int) { calls += "moveQueueItem" }
+    override fun removeQueueItem(index: Int) { calls += "removeQueueItem" }
+    override fun clearUpNext() { calls += "clearUpNext" }
+    override fun setSleepTimer(durationMs: Long) { calls += "setSleepTimer" }
+    override fun setSleepTimerEndOfTrack() { calls += "setSleepTimerEndOfTrack" }
+    override fun cancelSleepTimer() { calls += "cancelSleepTimer" }
     override fun stop() { calls += "stop" }
 }
 

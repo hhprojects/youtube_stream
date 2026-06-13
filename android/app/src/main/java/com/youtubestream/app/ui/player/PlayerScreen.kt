@@ -2,6 +2,7 @@ package com.youtubestream.app.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,9 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FastForward
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,6 +88,8 @@ fun PlayerScreen(
 
     var expanded by remember { mutableStateOf(false) }
     var addingToId by remember { mutableStateOf<String?>(null) }   // current track's id, pending add-to-playlist
+    var sleepDialogOpen by remember { mutableStateOf(false) }
+    val sleepActive = state.sleepTimerEndsAtMs != null || state.sleepAtTrackEnd
     val upNext = state.queue.drop(state.currentIndex + 1)
 
     // Solid base so the sheet is never see-through: songs without artwork show this surface; songs with
@@ -108,25 +113,54 @@ fun PlayerScreen(
                     onMinimize = onMinimize,
                     onStop = onStop,
                     onAddToPlaylist = { state.currentMediaId?.let { addingToId = it } },
+                    sleepActive = sleepActive,
+                    onSleepTimer = { sleepDialogOpen = true },
                 )
             }
             item { HeroArtwork(state.artworkUri, Modifier.fillMaxWidth().aspectRatio(1f)) }
             item { TrackInfo(state.title, state.artist) }
             item { Scrubber(state) { ms -> connection.seekTo(ms) } }
             item { Controls(state, connection) }
-            item { UpNextHeader(upNext.size, expanded) { expanded = !expanded } }
-            if (expanded) items(upNext, key = { it.mediaId }) { item -> UpNextRow(item) }
+            item {
+                UpNextHeader(
+                    count = upNext.size,
+                    expanded = expanded,
+                    onToggle = { expanded = !expanded },
+                    onClear = { connection.clearUpNext() },
+                )
+            }
+            if (expanded) {
+                itemsIndexed(upNext, key = { _, it -> it.mediaId }) { i, item ->
+                    // upNext drops the current + earlier items, so the absolute timeline index is offset.
+                    val absoluteIndex = state.currentIndex + 1 + i
+                    UpNextRow(
+                        item = item,
+                        onPlay = { connection.playQueueItem(absoluteIndex) },
+                        onRemove = { connection.removeQueueItem(absoluteIndex) },
+                    )
+                }
+            }
         }
     }
 
     addingToId?.let { id ->
         AddToPlaylistSheet(songIds = listOf(id), onDismiss = { addingToId = null })
     }
+
+    if (sleepDialogOpen) {
+        SleepTimerDialog(state, connection, onDismiss = { sleepDialogOpen = false })
+    }
 }
 
-/** Header for the expanded player: minimize chevron (left) + overflow ⋮ with Add-to-playlist / Stop (right). */
+/** Header for the expanded player: minimize chevron (left) + overflow ⋮ with Add-to-playlist / Sleep / Stop. */
 @Composable
-private fun PlayerHeader(onMinimize: () -> Unit, onStop: () -> Unit, onAddToPlaylist: () -> Unit) {
+private fun PlayerHeader(
+    onMinimize: () -> Unit,
+    onStop: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    sleepActive: Boolean,
+    onSleepTimer: () -> Unit,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -146,12 +180,52 @@ private fun PlayerHeader(onMinimize: () -> Unit, onStop: () -> Unit, onAddToPlay
                     onClick = { menuOpen = false; onAddToPlaylist() },
                 )
                 DropdownMenuItem(
+                    text = { Text(if (sleepActive) "Sleep timer · on" else "Sleep timer") },
+                    onClick = { menuOpen = false; onSleepTimer() },
+                )
+                DropdownMenuItem(
                     text = { Text("Stop") },
                     onClick = { menuOpen = false; onStop() },
                 )
             }
         }
     }
+}
+
+/** Sleep-timer picker: timed durations, "End of track", and Off (the currently-active option is checked). */
+@Composable
+private fun SleepTimerDialog(
+    state: PlayerUiState,
+    connection: PlaybackConnection,
+    onDismiss: () -> Unit,
+) {
+    val active = state.sleepTimerEndsAtMs != null || state.sleepAtTrackEnd
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sleep timer") },
+        text = {
+            Column {
+                listOf(15, 30, 45, 60).forEach { min ->
+                    DropdownMenuItem(
+                        text = { Text("$min minutes") },
+                        onClick = { connection.setSleepTimer(min * 60_000L); onDismiss() },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("End of track" + if (state.sleepAtTrackEnd) "  ✓" else "") },
+                    onClick = { connection.setSleepTimerEndOfTrack(); onDismiss() },
+                )
+                if (active) {
+                    DropdownMenuItem(
+                        text = { Text("Turn off", color = MaterialTheme.colorScheme.error) },
+                        onClick = { connection.cancelSleepTimer(); onDismiss() },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 /** Full-bleed album art, scaled up and blurred, with a surface scrim so foreground text stays legible. */
@@ -320,9 +394,12 @@ private fun EpisodeControls(state: PlayerUiState, connection: PlaybackConnection
 }
 
 @Composable
-private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) {
+private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit, onClear: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("Up next ($count)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        if (count > 0) {
+            TextButton(onClick = onClear) { Text("Clear") }
+        }
         IconButton(onClick = onToggle) {
             if (expanded) Icon(Icons.Filled.ExpandLess, contentDescription = "Collapse")
             else Icon(Icons.Filled.ExpandMore, contentDescription = "Expand")
@@ -330,11 +407,26 @@ private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) {
     }
 }
 
+/** A queue row: tap the body to jump to that track; the trailing ✕ removes it from the queue. */
 @Composable
-private fun UpNextRow(item: QueueItem) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(item.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun UpNextRow(item: QueueItem, onPlay: () -> Unit, onRemove: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                item.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onRemove) {
+            Icon(Icons.Filled.Close, contentDescription = "Remove from queue")
+        }
     }
 }
 
