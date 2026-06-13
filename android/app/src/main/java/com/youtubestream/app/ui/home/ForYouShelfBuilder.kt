@@ -9,7 +9,8 @@ import com.youtubestream.app.data.local.PlayEvent
  */
 object ForYouShelfBuilder {
     private const val MAX_ITEMS = 12
-    private const val MIN_VISIBLE = 4
+    private const val MIN_VISIBLE = 4               // "On repeat" needs volume to be a meaningful signal
+    private const val RECENT_MIN_VISIBLE = 2        // "Recently played" is a quick-resume row — surface it sooner
     private const val DAY_MS = 24L * 60 * 60 * 1000
     private const val RECENT_WINDOW_MS = 30 * DAY_MS
     private const val ON_REPEAT_MIN = 3
@@ -31,9 +32,11 @@ object ForYouShelfBuilder {
                 .sortedByDescending { it.value }.map { it.key },
         )
 
-        return listOf(
-            Shelf(ShelfId.RECENTLY_PLAYED, "Recently played", recentlyPlayed),
-            Shelf(ShelfId.ON_REPEAT, "On repeat", onRepeat),
-        ).filter { it.songs.size >= MIN_VISIBLE }
+        return listOfNotNull(
+            Shelf(ShelfId.RECENTLY_PLAYED, "Recently played", recentlyPlayed)
+                .takeIf { it.songs.size >= RECENT_MIN_VISIBLE },
+            Shelf(ShelfId.ON_REPEAT, "On repeat", onRepeat)
+                .takeIf { it.songs.size >= MIN_VISIBLE },
+        )
     }
 }

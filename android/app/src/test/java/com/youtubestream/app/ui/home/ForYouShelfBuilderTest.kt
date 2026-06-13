@@ -51,6 +51,23 @@ class ForYouShelfBuilderTest {
     }
 
     @Test
+    fun recentlyPlayed_showsWithJustTwoDistinct() {
+        // Quick-resume ("jump back in"): a small history still surfaces Recently played (min 2).
+        val songs = lib("a", "b", "c")
+        val events = listOf(play("a", now - 2), play("b", now - 1))
+        val rp = shelf(ForYouShelfBuilder.build(songs, events, now), ShelfId.RECENTLY_PLAYED)
+        assertEquals(listOf("b", "a"), rp?.songs?.map { it.id })
+    }
+
+    @Test
+    fun recentlyPlayed_singleDistinct_stillHidden() {
+        // One distinct recent song is too sparse for a shelf — stays hidden.
+        val songs = lib("a")
+        val events = listOf(play("a", now - 1), play("a", now - 2))
+        assertEquals(null, shelf(ForYouShelfBuilder.build(songs, events, now), ShelfId.RECENTLY_PLAYED))
+    }
+
+    @Test
     fun onRepeat_belowMinVisible_isHidden() {
         // Only one qualifying song (< MIN_VISIBLE=4) → no On repeat shelf at all.
         val songs = lib("a")
