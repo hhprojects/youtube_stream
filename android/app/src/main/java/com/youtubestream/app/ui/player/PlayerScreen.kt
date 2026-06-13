@@ -175,7 +175,9 @@ fun PlayerScreen(
                     )
                 }
                 if (expanded) {
-                    itemsIndexed(upNext, key = { _, it -> it.mediaId }) { i, item ->
+                    // Key by POSITION, not mediaId: the queue can hold the same track twice (add-to-queue /
+                    // play-next of an already-queued song), and duplicate LazyColumn keys crash Compose.
+                    itemsIndexed(upNext, key = { i, _ -> state.currentIndex + 1 + i }) { i, item ->
                         // upNext drops the current + earlier items, so the absolute timeline index is offset.
                         val absoluteIndex = state.currentIndex + 1 + i
                         UpNextRow(
