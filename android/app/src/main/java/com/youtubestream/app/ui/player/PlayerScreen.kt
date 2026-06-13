@@ -3,6 +3,7 @@ package com.youtubestream.app.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FastForward
@@ -52,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,12 +62,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.roundToInt
 import coil3.compose.AsyncImage
 import com.youtubestream.app.lyrics.SongRef
 import com.youtubestream.app.playback.AppRepeatMode
@@ -100,6 +109,16 @@ fun PlayerScreen(
     // true play order. The interactive ops below are all self-consistent with these shown rows: tapping a
     // row jumps to that timeline item, ✕ removes it, and Clear empties exactly this [current+1, end) range.
     val upNext = state.queue.drop(state.currentIndex + 1)
+
+    // Drag-reorder state. `working` mirrors up-next but is locally reorderable; it re-seeds only when the
+    // real queue/current item changes — NOT on the 500ms position tick (state.queue keeps its identity
+    // across the .copy()). Index-based (the queue may hold duplicate mediaIds). The dragged row floats via
+    // translationY while the list stays put; on release the new order commits to the controller.
+    var working by remember(state.queue, state.currentIndex) { mutableStateOf(upNext) }
+    var dragFrom by remember { mutableStateOf<Int?>(null) }
+    var dragAccumPx by remember { mutableFloatStateOf(0f) }
+    var rowHeightPx by remember { mutableIntStateOf(0) }
+    val stridePx = rowHeightPx + with(LocalDensity.current) { 16.dp.roundToPx() } // row + the spacedBy(16.dp) gap
 
     var showLyrics by remember { mutableStateOf(false) }
     // Lyrics are songs-only; currentMediaId is non-null here (guarded by the early return above).
@@ -168,7 +187,7 @@ fun PlayerScreen(
                 item { Controls(state, connection) }
                 item {
                     UpNextHeader(
-                        count = upNext.size,
+                        count = working.size,
                         expanded = expanded,
                         onToggle = { expanded = !expanded },
                         onClear = { connection.clearUpNext() },
@@ -177,13 +196,34 @@ fun PlayerScreen(
                 if (expanded) {
                     // Key by POSITION, not mediaId: the queue can hold the same track twice (add-to-queue /
                     // play-next of an already-queued song), and duplicate LazyColumn keys crash Compose.
-                    itemsIndexed(upNext, key = { i, _ -> state.currentIndex + 1 + i }) { i, item ->
-                        // upNext drops the current + earlier items, so the absolute timeline index is offset.
+                    itemsIndexed(working, key = { i, _ -> state.currentIndex + 1 + i }) { i, item ->
+                        // working drops the current + earlier items, so the absolute timeline index is offset.
                         val absoluteIndex = state.currentIndex + 1 + i
                         UpNextRow(
                             item = item,
+                            dragged = dragFrom == i,
+                            dragOffsetPx = if (dragFrom == i) dragAccumPx else 0f,
+                            onMeasured = { h -> if (h > 0) rowHeightPx = h },
                             onPlay = { connection.playQueueItem(absoluteIndex) },
                             onRemove = { connection.removeQueueItem(absoluteIndex) },
+                            onDragStart = { dragFrom = i; dragAccumPx = 0f },
+                            onDrag = { dy -> dragAccumPx += dy },
+                            onDragEnd = {
+                                val from = dragFrom
+                                if (from != null && stridePx > 0) {
+                                    val to = (from + (dragAccumPx / stridePx).roundToInt())
+                                        .coerceIn(0, working.lastIndex)
+                                    if (to != from) {
+                                        working = moveItem(working, from, to)
+                                        connection.moveQueueItem(
+                                            state.currentIndex + 1 + from,
+                                            state.currentIndex + 1 + to,
+                                        )
+                                    }
+                                }
+                                dragFrom = null
+                            },
+                            onDragCancel = { dragFrom = null },
                         )
                     }
                 }
@@ -468,11 +508,38 @@ private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit, on
     }
 }
 
-/** A queue row: tap the body to jump to that track; the trailing ✕ removes it from the queue. */
+/**
+ * A queue row: tap the body to jump to that track; the trailing ✕ removes it; long-press the ☰ handle
+ * (not the row, which taps to play) to drag-reorder. While [dragged], the row floats via [dragOffsetPx]
+ * (translationY) above the others; the list itself stays put until the drop commits the new order.
+ */
 @Composable
-private fun UpNextRow(item: QueueItem, onPlay: () -> Unit, onRemove: () -> Unit) {
+private fun UpNextRow(
+    item: QueueItem,
+    dragged: Boolean,
+    dragOffsetPx: Float,
+    onMeasured: (Int) -> Unit,
+    onPlay: () -> Unit,
+    onRemove: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .onSizeChanged { onMeasured(it.height) }
+            .zIndex(if (dragged) 1f else 0f)
+            .graphicsLayer {
+                if (dragged) {
+                    translationY = dragOffsetPx
+                    scaleX = 1.03f
+                    scaleY = 1.03f
+                }
+            }
+            .clickable(onClick = onPlay)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -487,6 +554,21 @@ private fun UpNextRow(item: QueueItem, onPlay: () -> Unit, onRemove: () -> Unit)
         }
         IconButton(onClick = onRemove) {
             Icon(Icons.Filled.Close, contentDescription = "Remove from queue")
+        }
+        Box(
+            Modifier
+                .size(40.dp)
+                .pointerInput(Unit) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { onDragStart() },
+                        onDrag = { change, amount -> change.consume(); onDrag(amount.y) },
+                        onDragEnd = { onDragEnd() },
+                        onDragCancel = { onDragCancel() },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.DragHandle, contentDescription = "Reorder")
         }
     }
 }
