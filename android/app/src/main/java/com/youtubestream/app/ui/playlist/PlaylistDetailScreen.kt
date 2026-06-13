@@ -52,6 +52,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -239,7 +242,29 @@ fun PlaylistDetailScreen(source: PlaylistSource, onBack: () -> Unit, modifier: M
                                             // Long-press the handle (not the whole row, which taps to play) to drag.
                                             Box(
                                                 Modifier
-                                                    .size(40.dp)
+                                                    .size(48.dp)   // 48dp min touch target
+                                                    // Drag is touch-only; expose discrete moves for TalkBack/Switch Access.
+                                                    .semantics {
+                                                        // `pos` decides which actions to OFFER; each action RE-reads the
+                                                        // song's live index when invoked (a drag may have reordered
+                                                        // `working` before this semantics block recomposed) — moving by a
+                                                        // stale captured index would shift the wrong song.
+                                                        val pos = working.indexOfFirst { it.id == song.id }
+                                                        fun move(delta: Int) {
+                                                            val from = working.indexOfFirst { it.id == song.id }
+                                                            val to = from + delta
+                                                            if (from < 0 || to !in working.indices) return
+                                                            val ids = PlaylistReorder.reorder(working.map { it.id }, from, to)
+                                                            working = ids.mapNotNull { id -> working.firstOrNull { it.id == id } }
+                                                            vm.reorder(ids)
+                                                        }
+                                                        customActions = buildList {
+                                                            if (pos > 0) add(CustomAccessibilityAction("Move up") { move(-1); true })
+                                                            if (pos in 0 until working.lastIndex) {
+                                                                add(CustomAccessibilityAction("Move down") { move(1); true })
+                                                            }
+                                                        }
+                                                    }
                                                     .pointerInput(song.id) {
                                                         detectDragGesturesAfterLongPress(
                                                             onDragStart = {

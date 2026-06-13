@@ -11,6 +11,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.youtubestream.app.data.network.ServerStatus
 
@@ -29,7 +32,9 @@ fun ServerStatusBanner(status: ServerStatus, onRetry: () -> Unit, modifier: Modi
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        modifier = modifier.fillMaxWidth(),
+        // liveRegion: TalkBack announces the banner when it appears (connectivity dropped) without
+        // the user having to be focused on it.
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),

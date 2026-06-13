@@ -67,6 +67,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -203,9 +207,20 @@ fun PlayerScreen(
                             item = item,
                             dragged = dragFrom == i,
                             dragOffsetPx = if (dragFrom == i) dragAccumPx else 0f,
+                            canMoveUp = i > 0,
+                            canMoveDown = i < working.lastIndex,
                             onMeasured = { h -> if (h > 0) rowHeightPx = h },
                             onPlay = { connection.playQueueItem(absoluteIndex) },
                             onRemove = { connection.removeQueueItem(absoluteIndex) },
+                            // Accessible reorder (TalkBack/Switch Access can't drag): discrete one-step moves.
+                            onMoveUp = {
+                                working = moveItem(working, i, i - 1)
+                                connection.moveQueueItem(absoluteIndex, absoluteIndex - 1)
+                            },
+                            onMoveDown = {
+                                working = moveItem(working, i, i + 1)
+                                connection.moveQueueItem(absoluteIndex, absoluteIndex + 1)
+                            },
                             onDragStart = { dragFrom = i; dragAccumPx = 0f },
                             onDrag = { dy -> dragAccumPx += dy },
                             onDragEnd = {
@@ -446,7 +461,11 @@ private fun SongControls(state: PlayerUiState, connection: PlaybackConnection) {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = { connection.toggleShuffle() }) {
+        IconButton(
+            onClick = { connection.toggleShuffle() },
+            // State is otherwise conveyed only by tint; stateDescription makes it audible to TalkBack.
+            modifier = Modifier.semantics { stateDescription = if (state.shuffleEnabled) "On" else "Off" },
+        ) {
             Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = if (state.shuffleEnabled) active else idle)
         }
         IconButton(onClick = { connection.previous() }) {
@@ -518,9 +537,13 @@ private fun UpNextRow(
     item: QueueItem,
     dragged: Boolean,
     dragOffsetPx: Float,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     onMeasured: (Int) -> Unit,
     onPlay: () -> Unit,
     onRemove: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
@@ -557,7 +580,14 @@ private fun UpNextRow(
         }
         Box(
             Modifier
-                .size(40.dp)
+                .size(48.dp)   // 48dp min touch target
+                // Drag is touch-only; expose discrete Move up/down so TalkBack & Switch Access can reorder.
+                .semantics {
+                    customActions = buildList {
+                        if (canMoveUp) add(CustomAccessibilityAction("Move up") { onMoveUp(); true })
+                        if (canMoveDown) add(CustomAccessibilityAction("Move down") { onMoveDown(); true })
+                    }
+                }
                 .pointerInput(Unit) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { onDragStart() },

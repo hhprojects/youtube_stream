@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -58,8 +59,16 @@ fun SongRow(
             SongArtwork(artworkUrl)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, maxLines = 1)
-                Text(artist, maxLines = 1)
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // De-emphasised secondary line + ellipsis so long titles/artists clip cleanly with "…"
+                // instead of mid-glyph. (The clickable Surface already merges these for TalkBack.)
+                Text(
+                    artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             if (!inSelectionMode) trailing()
         }
