@@ -87,6 +87,7 @@ function pruneDownloads(dir = DOWNLOAD_DIR, maxBytes = DOWNLOADS_MAX_BYTES) {
       try {
         fs.unlinkSync(f.path);
         try { fs.unlinkSync(sidecarPathFor(dir, f.name)); } catch {}
+        try { fs.unlinkSync(lyricsPathFor(dir, f.name)); } catch {}
         total -= f.size;
         removed.push(f.name);
         console.log(`[prune] removed ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`);
@@ -343,6 +344,7 @@ app.post('/api/download', (req, res) => {
         size: stats.size,
       });
       pruneDownloads();
+      getLyrics(DOWNLOAD_DIR, `${safeTitle}.m4a`, parsed.title, parsed.artist, 0).catch(() => {});
     } catch {
       res.status(500).json({ error: 'Failed to access downloaded file' });
     }
@@ -394,9 +396,30 @@ app.delete('/api/library/:filename', (req, res) => {
     }
     fs.unlinkSync(filePath);
     try { fs.unlinkSync(sidecarPathFor(DOWNLOAD_DIR, filename)); } catch {}
+    try { fs.unlinkSync(lyricsPathFor(DOWNLOAD_DIR, filename)); } catch {}
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// Lyrics for a downloaded song. Keyed by filename (== client songId); title/artist/durationSec come
+// from the client (the Pi has no duration on disk). 200 with nulls = checked, none found (cached);
+// 502 = lrclib unreachable (client treats as "couldn't check" and does NOT cache a negative).
+app.get('/api/lyrics', async (req, res) => {
+  const filename = path.basename(String(req.query.filename || '')).replace(/[^a-zA-Z0-9_.-]/g, '');
+  if (!filename || !(filename.endsWith('.m4a') || filename.endsWith('.mp3'))) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  const title = String(req.query.title || '');
+  const artist = String(req.query.artist || '');
+  const durationSec = Number(req.query.durationSec) || 0;
+  try {
+    const out = await getLyrics(DOWNLOAD_DIR, filename, title, artist, durationSec);
+    res.json(out);
+  } catch (e) {
+    console.warn('[lyrics] upstream failed', e.message);
+    res.status(502).json({ error: 'Lyrics source unavailable' });
   }
 });
 
