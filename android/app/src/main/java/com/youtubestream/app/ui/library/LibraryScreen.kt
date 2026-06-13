@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -18,8 +19,15 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,13 +75,22 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
     val songs = (state as? UiState.Content)?.data.orEmpty()
 
+    var sort by remember { mutableStateOf(LibrarySort.RECENTLY_ADDED) }
+    var query by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    var sortMenuOpen by remember { mutableStateOf(false) }
+    // The visible list: filtered, then sorted. Play / select-all / row-index all operate on THIS list,
+    // so tapping the 3rd visible row plays the 3rd visible row even when sorted or filtered.
+    val displayed = remember(songs, sort, query) { filterLibrary(sortLibrary(songs, sort), query) }
+    val displayedIds = displayed.map { it.id }
+
     Column(modifier.fillMaxSize().padding(16.dp)) {
         if (selection.active) {
             SelectionTopBar(
                 count = selection.count,
-                allSelected = selection.isAllSelected(songs.map { it.id }),
+                allSelected = selection.isAllSelected(displayedIds),
                 onClose = { vm.exitSelection() },
-                onToggleSelectAll = { vm.toggleSelectAll(songs.map { it.id }) },
+                onToggleSelectAll = { vm.toggleSelectAll(displayedIds) },
             ) {
                 IconButton(enabled = selection.count > 0, onClick = { bulkAdding = true }) {
                     Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
@@ -89,22 +106,70 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }
                 Text("All songs", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 if (songs.isNotEmpty()) {
+                    IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) query = "" }) {
+                        Icon(Icons.Filled.Search, contentDescription = "Search songs")
+                    }
                     TextButton(onClick = { vm.enterSelection() }) { Text("Select") }
                 }
             }
         }
+
+        // Play / Shuffle the whole (filtered) list + a sort menu — shown outside selection when there's content.
+        if (!selection.active && songs.isNotEmpty()) {
+            if (searchOpen) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    placeholder = { Text("Filter songs") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(onClick = { vm.play(displayed, 0) }, enabled = displayed.isNotEmpty()) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Play")
+                }
+                Spacer(Modifier.width(8.dp))
+                FilledTonalButton(onClick = { vm.playShuffled(displayed) }, enabled = displayed.isNotEmpty()) {
+                    Icon(Icons.Filled.Shuffle, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Shuffle")
+                }
+                Spacer(Modifier.weight(1f))
+                Box {
+                    TextButton(onClick = { sortMenuOpen = true }) { Text(sort.label) }
+                    DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                        LibrarySort.entries.forEach { opt ->
+                            DropdownMenuItem(
+                                text = { Text(opt.label) },
+                                onClick = { sort = opt; sortMenuOpen = false },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             when (val s = state) {
                 is UiState.Idle, is UiState.Loading -> CircularProgressIndicator()
                 is UiState.Error -> Text("Error: ${s.message}")
                 is UiState.Content -> if (s.data.isEmpty()) {
                     Text("No downloads yet. Search for a song and tap Download.")
+                } else if (displayed.isEmpty()) {
+                    Text("No songs match \"${query.trim()}\".")
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        itemsIndexed(s.data, key = { _, song -> song.id }) { index, song ->
+                        itemsIndexed(displayed, key = { _, song -> song.id }) { index, song ->
                             SongRow(
                                 title = song.title,
                                 artist = song.artist,
@@ -112,7 +177,7 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 inSelectionMode = selection.active,
                                 selected = song.id in selection.selectedIds,
                                 onClick = {
-                                    if (selection.active) vm.toggle(song.id) else vm.play(s.data, index)
+                                    if (selection.active) vm.toggle(song.id) else vm.play(displayed, index)
                                 },
                                 onLongClick = { if (!selection.active) vm.enterSelection(song.id) },
                                 trailing = {

@@ -47,6 +47,11 @@ class LibraryViewModel(
         controller.setQueueAndPlay(songs.map { it.toPlayableTrack() }, startIndex)
     }
 
+    /** Shuffle = play a pre-shuffled queue from the top (player shuffle-mode is untouched). */
+    fun playShuffled(songs: List<LibrarySong>) {
+        controller.setQueueAndPlay(songs.shuffled().map { it.toPlayableTrack() }, 0)
+    }
+
     fun enterSelection(initialId: String? = null) = _selection.update { it.enter(initialId) }
     fun exitSelection() { _selection.value = SelectionState() }
     fun toggle(id: String) = _selection.update { it.toggle(id) }
