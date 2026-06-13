@@ -18,7 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
@@ -181,15 +181,19 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 },
                                 onLongClick = { if (!selection.active) vm.enterSelection(song.id) },
                                 trailing = {
-                                    IconButton(onClick = { addingTo = song }) {
-                                        Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
-                                    }
-                                    IconButton(onClick = { editing = song }) {
-                                        Icon(Icons.Filled.Edit, contentDescription = "Edit artwork")
-                                    }
-                                    IconButton(onClick = { pendingDelete = song }) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "Delete")
-                                    }
+                                    SongActionsMenu(
+                                        onPlayNext = {
+                                            vm.playNext(song)
+                                            Toast.makeText(context, "Playing next", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onAddToQueue = {
+                                            vm.addToQueue(song)
+                                            Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onAddToPlaylist = { addingTo = song },
+                                        onEditArtwork = { editing = song },
+                                        onDelete = { pendingDelete = song },
+                                    )
                                 },
                             )
                         }
@@ -294,5 +298,32 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     // Selection is retained after a bulk add (so the same set can go to several playlists); ✕ exits.
     if (bulkAdding) {
         AddToPlaylistSheet(songIds = selection.selectedIds.toList(), onDismiss = { bulkAdding = false })
+    }
+}
+
+/** Per-row overflow: Play next / Add to queue / Add to playlist / Edit artwork / Delete (replaces 3 icons). */
+@Composable
+private fun SongActionsMenu(
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onEditArtwork: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Play next") }, onClick = { open = false; onPlayNext() })
+            DropdownMenuItem(text = { Text("Add to queue") }, onClick = { open = false; onAddToQueue() })
+            DropdownMenuItem(text = { Text("Add to playlist") }, onClick = { open = false; onAddToPlaylist() })
+            DropdownMenuItem(text = { Text("Edit artwork") }, onClick = { open = false; onEditArtwork() })
+            DropdownMenuItem(
+                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                onClick = { open = false; onDelete() },
+            )
+        }
     }
 }

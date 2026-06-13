@@ -20,6 +20,12 @@ interface PlaybackController {
     /** Seek relative to the current position, clamped to [0, duration]. Used by podcast skip ±. */
     fun seekBy(deltaMs: Long)
 
+    // --- Queue insertion ---
+    /** Append [tracks] to the end of the queue (starts a new queue + plays if nothing is queued). */
+    fun addToQueue(tracks: List<PlayableTrack>)
+    /** Insert [tracks] right after the current item (starts a new queue + plays if nothing is queued). */
+    fun playNext(tracks: List<PlayableTrack>)
+
     // --- Queue editing (absolute timeline indices) ---
     /** Jump playback to the queue item at [index] and play it. */
     fun playQueueItem(index: Int)

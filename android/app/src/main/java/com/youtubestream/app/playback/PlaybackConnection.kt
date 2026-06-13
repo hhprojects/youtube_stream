@@ -249,6 +249,28 @@ class PlaybackConnection(
         c.seekTo(target)
     }
 
+    // --- Queue insertion. Append / play-next; if the queue is empty, start a fresh queue + play so the
+    // action is never a silent no-op. Keep `currentQueue` aligned; saveNow() persists the high-value edit. ---
+
+    override fun addToQueue(tracks: List<PlayableTrack>) {
+        val c = controller ?: return
+        if (tracks.isEmpty()) return
+        if (c.mediaItemCount == 0) { setQueueAndPlay(tracks); return }
+        c.addMediaItems(tracks.map { it.toMediaItem() })
+        currentQueue = currentQueue + tracks
+        saveNow()
+    }
+
+    override fun playNext(tracks: List<PlayableTrack>) {
+        val c = controller ?: return
+        if (tracks.isEmpty()) return
+        if (c.mediaItemCount == 0) { setQueueAndPlay(tracks); return }
+        val at = (c.currentMediaItemIndex + 1).coerceIn(0, c.mediaItemCount)
+        c.addMediaItems(at, tracks.map { it.toMediaItem() })
+        currentQueue = currentQueue.toMutableList().apply { addAll(at, tracks) }
+        saveNow()
+    }
+
     // --- Queue editing. Each keeps `currentQueue` aligned with the controller's timeline; the
     // resulting timeline/transition events drive pushState + a debounced save automatically. ---
 

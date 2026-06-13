@@ -52,6 +52,12 @@ class LibraryViewModel(
         controller.setQueueAndPlay(songs.shuffled().map { it.toPlayableTrack() }, 0)
     }
 
+    /** Insert one song right after the current track. */
+    fun playNext(song: LibrarySong) = controller.playNext(listOf(song.toPlayableTrack()))
+
+    /** Append one song to the end of the queue. */
+    fun addToQueue(song: LibrarySong) = controller.addToQueue(listOf(song.toPlayableTrack()))
+
     fun enterSelection(initialId: String? = null) = _selection.update { it.enter(initialId) }
     fun exitSelection() { _selection.value = SelectionState() }
     fun toggle(id: String) = _selection.update { it.toggle(id) }
