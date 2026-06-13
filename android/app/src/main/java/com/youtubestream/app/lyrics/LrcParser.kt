@@ -30,4 +30,13 @@ object LrcParser {
         out.sortBy { it.timeMs }
         return out
     }
+
+    /** Index of the last line whose timestamp is ≤ [positionMs]; -1 before the first line. Lines must be sorted. */
+    fun currentLineIndex(positionMs: Long, lines: List<LyricLine>): Int {
+        var idx = -1
+        for (i in lines.indices) {
+            if (lines[i].timeMs <= positionMs) idx = i else break
+        }
+        return idx
+    }
 }

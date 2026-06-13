@@ -48,4 +48,24 @@ class LrcParserTest {
         assertEquals(listOf(LyricLine(5_000, "")), LrcParser.parse("[00:05.00]"))
         assertEquals(emptyList<LyricLine>(), LrcParser.parse(""))
     }
+
+    private val sample = listOf(LyricLine(10_000, "A"), LyricLine(20_000, "B"), LyricLine(30_000, "C"))
+
+    @Test
+    fun currentLineIndex_beforeFirstLineIsMinusOne() {
+        assertEquals(-1, LrcParser.currentLineIndex(5_000, sample))
+    }
+
+    @Test
+    fun currentLineIndex_exactAndBetween() {
+        assertEquals(0, LrcParser.currentLineIndex(10_000, sample))   // exactly on line 0
+        assertEquals(0, LrcParser.currentLineIndex(15_000, sample))   // between 0 and 1 → 0
+        assertEquals(1, LrcParser.currentLineIndex(20_001, sample))
+    }
+
+    @Test
+    fun currentLineIndex_afterLastIsLast_andEmptyIsMinusOne() {
+        assertEquals(2, LrcParser.currentLineIndex(999_999, sample))
+        assertEquals(-1, LrcParser.currentLineIndex(1_000, emptyList()))
+    }
 }
