@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, getLyrics, downloadBaseName, displayBaseName } = require('./server');
+const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, setSidecarTitle, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, getLyrics, downloadBaseName, displayBaseName } = require('./server');
 
 test('YOUTUBE_ID_REGEX accepts standard ids', () => {
   assert.ok(YOUTUBE_ID_REGEX.test('dQw4w9WgXcQ'));
@@ -290,6 +290,41 @@ test('libraryRowFor without a sidecar does not leak the id into the title', () =
     fs.writeFileSync(path.join(tmp, 'Artist___Song_dQw4w9WgXcQ.m4a'), Buffer.alloc(10));
     const row = libraryRowFor(tmp, 'Artist___Song_dQw4w9WgXcQ.m4a');
     assert.ok(!row.title.includes('dQw4w9WgXcQ'), `title leaked: ${row.title}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('setSidecarTitle merges the new title and keeps videoId/artist', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'title-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'song.m4a'), Buffer.alloc(1));
+    writeSidecar(tmp, 'song.m4a', { videoId: 'dQw4w9WgXcQ', title: 'Old', artist: 'Artist' });
+    setSidecarTitle(tmp, 'song.m4a', 'New Title');
+    assert.deepEqual(readSidecar(tmp, 'song.m4a'), { videoId: 'dQw4w9WgXcQ', title: 'New Title', artist: 'Artist' });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('setSidecarTitle drops the cached lyrics so the next fetch uses the new title', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'title-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'song.m4a'), Buffer.alloc(1));
+    writeLyricsCache(tmp, 'song.m4a', { synced: '[00:01.00] la', plain: 'la', fetchedAt: Date.now() });
+    setSidecarTitle(tmp, 'song.m4a', 'New Title');
+    assert.equal(readLyricsCache(tmp, 'song.m4a'), null);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('setSidecarTitle creates a sidecar when none exists', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'title-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'song.m4a'), Buffer.alloc(1));
+    setSidecarTitle(tmp, 'song.m4a', 'Fresh');
+    assert.deepEqual(readSidecar(tmp, 'song.m4a'), { title: 'Fresh' });
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

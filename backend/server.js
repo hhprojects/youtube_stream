@@ -266,6 +266,13 @@ function writeVideoId(dir, audioFile, videoId) {
   writeSidecar(dir, audioFile, { ...(readSidecar(dir, audioFile) || {}), videoId });
 }
 
+// Merge an edited display title into the sidecar (keeps videoId/artist) and drop the cached lyrics
+// so the next /api/lyrics lookup queries lrclib with the corrected title.
+function setSidecarTitle(dir, audioFile, title) {
+  writeSidecar(dir, audioFile, { ...(readSidecar(dir, audioFile) || {}), title });
+  try { fs.unlinkSync(lyricsPathFor(dir, audioFile)); } catch {}
+}
+
 // One /api/library row. Prefer the sidecar's title/artist/videoId (written at download time, when the
 // real " - " separator still exists) over re-deriving from the underscored filename (which can't be
 // split → "Unknown"). Forward-only: files downloaded before sidecars carried title/artist still fall back.
@@ -395,6 +402,26 @@ app.post('/api/library/:filename/artwork', (req, res) => {
     res.json({ success: true, thumbnail: thumbnailUrl(videoId) });
   } catch {
     res.status(500).json({ error: 'Failed to save artwork' });
+  }
+});
+
+app.post('/api/library/:filename/title', (req, res) => {
+  const filename = path.basename(req.params.filename).replace(/[^a-zA-Z0-9_.-]/g, '');
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+  if (!filename || !(filename.endsWith('.m4a') || filename.endsWith('.mp3'))) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  if (!title) {
+    return res.status(400).json({ error: 'Title is required' });
+  }
+  if (!fs.existsSync(path.join(DOWNLOAD_DIR, filename))) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  try {
+    setSidecarTitle(DOWNLOAD_DIR, filename, title);
+    res.json({ success: true, title });
+  } catch {
+    res.status(500).json({ error: 'Failed to save title' });
   }
 });
 
@@ -606,4 +633,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, fetchFromLrclib, getLyrics, downloadBaseName, displayBaseName };
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, setSidecarTitle, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, fetchFromLrclib, getLyrics, downloadBaseName, displayBaseName };
