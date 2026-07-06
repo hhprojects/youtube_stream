@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, getLyrics } = require('./server');
+const { parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, getLyrics, downloadBaseName, displayBaseName } = require('./server');
 
 test('YOUTUBE_ID_REGEX accepts standard ids', () => {
   assert.ok(YOUTUBE_ID_REGEX.test('dQw4w9WgXcQ'));
@@ -254,6 +254,43 @@ test('getLyrics writes a negative on a genuine miss (get 404 + search empty)', a
     assert.equal(typeof cached.fetchedAt, 'number');   // negative was persisted
   } finally {
     global.fetch = orig;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('downloadBaseName: different videos with the same title get different names', () => {
+  const a = downloadBaseName('Song (Official Video)', 'aaaaaaaaaaa');
+  const b = downloadBaseName('Song [Official Video]', 'bbbbbbbbbbb');
+  assert.notEqual(a, b);
+  assert.ok(a.endsWith('_aaaaaaaaaaa'));
+  assert.ok(b.endsWith('_bbbbbbbbbbb'));
+});
+
+test('downloadBaseName: same video is idempotent (dedupe-friendly)', () => {
+  assert.equal(downloadBaseName('My Song', 'dQw4w9WgXcQ'), downloadBaseName('My Song', 'dQw4w9WgXcQ'));
+});
+
+test('downloadBaseName: sanitizes and truncates the title to 50 chars but keeps the full id', () => {
+  const base = downloadBaseName('x'.repeat(80), 'dQw4w9WgXcQ');
+  assert.equal(base, `${'x'.repeat(50)}_dQw4w9WgXcQ`);
+});
+
+test('downloadBaseName: empty title falls back to the id', () => {
+  assert.equal(downloadBaseName('', 'dQw4w9WgXcQ'), 'dQw4w9WgXcQ_dQw4w9WgXcQ');
+});
+
+test('displayBaseName strips the extension and a trailing 11-char id', () => {
+  assert.equal(displayBaseName('Song_Name_dQw4w9WgXcQ.m4a'), 'Song_Name');
+  assert.equal(displayBaseName('Old_Style_File.m4a'), 'Old_Style_File'); // legacy: nothing to strip
+});
+
+test('libraryRowFor without a sidecar does not leak the id into the title', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rowfor-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'Artist___Song_dQw4w9WgXcQ.m4a'), Buffer.alloc(10));
+    const row = libraryRowFor(tmp, 'Artist___Song_dQw4w9WgXcQ.m4a');
+    assert.ok(!row.title.includes('dQw4w9WgXcQ'), `title leaked: ${row.title}`);
+  } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

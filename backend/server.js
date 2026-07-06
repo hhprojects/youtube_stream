@@ -134,6 +134,21 @@ function parseArtistTitle(rawTitle) {
   return { artist: 'Unknown', title: rawTitle };
 }
 
+// Filename = sanitized title + the immutable videoId. The id suffix is what makes two DIFFERENT
+// videos with colliding titles produce different files: yt-dlp silently skips an existing final
+// file, which used to leave stale audio under a fresh title/sidecar (the "title X plays audio Y"
+// bug). Same video re-requested → same name → the skip becomes a correct instant dedupe.
+function downloadBaseName(title, videoId) {
+  const safeTitle = String(title || videoId).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+  return `${safeTitle}_${videoId}`;
+}
+
+// Reverse of downloadBaseName for the no-sidecar display fallback: drop the extension and the
+// trailing _<videoId>. Legacy (pre-suffix) files simply have nothing to strip.
+function displayBaseName(file) {
+  return file.replace(/\.(m4a|mp3)$/i, '').replace(/_[\w-]{11}$/, '');
+}
+
 function thumbnailUrl(videoId) {
   return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
 }
@@ -257,7 +272,7 @@ function writeVideoId(dir, audioFile, videoId) {
 function libraryRowFor(dir, file) {
   const stats = fs.statSync(path.join(dir, file));
   const sc = readSidecar(dir, file);
-  const rawTitle = file.replace(/\.(m4a|mp3)$/, '').replace(/_/g, ' ');
+  const rawTitle = displayBaseName(file).replace(/_/g, ' ');
   const parsed = parseArtistTitle(rawTitle);
   return {
     id: file,
@@ -315,8 +330,8 @@ app.post('/api/download', (req, res) => {
   if (!videoId || !YOUTUBE_ID_REGEX.test(String(videoId))) {
     return res.status(400).json({ error: 'Valid video ID is required' });
   }
-  const safeTitle = String(title || videoId).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-  const outputPath = path.join(DOWNLOAD_DIR, `${safeTitle}.m4a`);
+  const filename = `${downloadBaseName(title, videoId)}.m4a`;
+  const outputPath = path.join(DOWNLOAD_DIR, filename);
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   execFile('yt-dlp', ['-x', '--audio-format', 'm4a', '-o', outputPath, ytUrl], { timeout: 300000 }, (error, stdout, stderr) => {
     if (error) {
@@ -331,20 +346,20 @@ app.post('/api/download', (req, res) => {
     }
     try {
       const stats = fs.statSync(outputPath);
-      const parsed = parseArtistTitle(title || safeTitle);   // from the ORIGINAL title (still has " - ")
+      const parsed = parseArtistTitle(title || videoId);   // from the ORIGINAL title (still has " - ")
       // best-effort (a sidecar miss must not fail a good download): store the real title/artist so
       // /api/library doesn't re-derive them from the separator-less filename and land on "Unknown".
-      try { writeSidecar(DOWNLOAD_DIR, `${safeTitle}.m4a`, { videoId, title: parsed.title, artist: parsed.artist }); } catch {}
+      try { writeSidecar(DOWNLOAD_DIR, filename, { videoId, title: parsed.title, artist: parsed.artist }); } catch {}
       res.json({
         success: true,
-        filename: `${safeTitle}.m4a`,
-        downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(safeTitle + '.m4a')}`,
+        filename,
+        downloadUrl: `http://${SERVER_URL}/downloads/${encodeURIComponent(filename)}`,
         title: parsed.title,
         artist: parsed.artist,
         size: stats.size,
       });
       pruneDownloads();
-      getLyrics(DOWNLOAD_DIR, `${safeTitle}.m4a`, parsed.title, parsed.artist, 0).catch(() => {});
+      getLyrics(DOWNLOAD_DIR, filename, parsed.title, parsed.artist, 0).catch(() => {});
     } catch {
       res.status(500).json({ error: 'Failed to access downloaded file' });
     }
@@ -530,8 +545,7 @@ app.post('/api/podcasts/download', (req, res) => {
   if (!videoId || !YOUTUBE_ID_REGEX.test(String(videoId))) {
     return res.status(400).json({ error: 'Valid video ID is required' });
   }
-  const safeTitle = String(title || videoId).replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-  const filename = `${safeTitle}.m4a`;
+  const filename = `${downloadBaseName(title, videoId)}.m4a`;
   const outputPath = path.join(PODCAST_DIR, filename);
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   // 30-min ceiling: a 1-2h episode extraction can exceed the song path's 5-min timeout.
@@ -544,7 +558,7 @@ app.post('/api/podcasts/download', (req, res) => {
       try {
         writeSidecar(PODCAST_DIR, filename, {
           videoId,
-          title: title || safeTitle,
+          title: title || videoId,
           showName: showName || 'Unknown',
           showId: showId || null,
           date: date || null,
@@ -592,4 +606,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, fetchFromLrclib, getLyrics };
+module.exports = { app, parseArtistTitle, YOUTUBE_ID_REGEX, pruneDownloads, thumbnailUrl, sidecarPathFor, readVideoId, writeVideoId, readSidecar, writeSidecar, libraryRowFor, cleanTrackTitle, lyricsPathFor, readLyricsCache, writeLyricsCache, fetchFromLrclib, getLyrics, downloadBaseName, displayBaseName };
