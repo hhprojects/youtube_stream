@@ -108,10 +108,10 @@ fun PlayerScreen(
     var addingToId by remember { mutableStateOf<String?>(null) }   // current track's id, pending add-to-playlist
     var sleepDialogOpen by remember { mutableStateOf(false) }
     val sleepActive = state.sleepTimerEndsAtMs != null || state.sleepAtTrackEnd
-    // Up-next is the queue in TIMELINE order after the current item. Media3 doesn't expose the shuffle
-    // permutation (see WidgetModel's same caveat), so with shuffle ON this list is timeline order, not the
-    // true play order. The interactive ops below are all self-consistent with these shown rows: tapping a
-    // row jumps to that timeline item, ✕ removes it, and Clear empties exactly this [current+1, end) range.
+    // Up-next in TIMELINE order — which is now the TRUE play order (shuffle is app-managed in the
+    // timeline; Media3's hidden shuffle permutation is never used). Two tiers over one index space:
+    // the manual "Next in queue" block first, then the "Next up" context; rows keep their absolute
+    // timeline index so play/remove/move are identical for both sections.
     val upNext = state.queue.drop(state.currentIndex + 1)
 
     // Drag-reorder state. `working` mirrors up-next but is locally reorderable; it re-seeds only when the
@@ -123,6 +123,9 @@ fun PlayerScreen(
     var dragAccumPx by remember { mutableFloatStateOf(0f) }
     var rowHeightPx by remember { mutableIntStateOf(0) }
     val stridePx = rowHeightPx + with(LocalDensity.current) { 16.dp.roundToPx() } // row + the spacedBy(16.dp) gap
+
+    // Section boundary, derived from the locally reorderable list so it tracks in-flight drags.
+    val pendingCount = working.takeWhile { it.isManual }.count()
 
     var showLyrics by remember { mutableStateOf(false) }
     // Lyrics are songs-only; currentMediaId is non-null here (guarded by the early return above).
@@ -167,6 +170,45 @@ fun PlayerScreen(
                 Controls(state, connection)
             }
         } else {
+            val queueRow: @Composable (Int, QueueItem) -> Unit = { wi, item ->
+                val absoluteIndex = state.currentIndex + 1 + wi
+                UpNextRow(
+                    item = item,
+                    dragged = dragFrom == wi,
+                    dragOffsetPx = if (dragFrom == wi) dragAccumPx else 0f,
+                    canMoveUp = wi > 0,
+                    canMoveDown = wi < working.lastIndex,
+                    onMeasured = { h -> if (h > 0) rowHeightPx = h },
+                    onPlay = { connection.playQueueItem(absoluteIndex) },
+                    onRemove = { connection.removeQueueItem(absoluteIndex) },
+                    onMoveUp = {
+                        working = moveItem(working, wi, wi - 1)
+                        connection.moveQueueItem(absoluteIndex, absoluteIndex - 1)
+                    },
+                    onMoveDown = {
+                        working = moveItem(working, wi, wi + 1)
+                        connection.moveQueueItem(absoluteIndex, absoluteIndex + 1)
+                    },
+                    onDragStart = { dragFrom = wi; dragAccumPx = 0f },
+                    onDrag = { dy -> dragAccumPx += dy },
+                    onDragEnd = {
+                        val from = dragFrom
+                        if (from != null && stridePx > 0) {
+                            val to = (from + (dragAccumPx / stridePx).roundToInt())
+                                .coerceIn(0, working.lastIndex)
+                            if (to != from) {
+                                working = moveItem(working, from, to)
+                                connection.moveQueueItem(
+                                    state.currentIndex + 1 + from,
+                                    state.currentIndex + 1 + to,
+                                )
+                            }
+                        }
+                        dragFrom = null
+                    },
+                    onDragCancel = { dragFrom = null },
+                )
+            }
             LazyColumn(
                 // systemBarsPadding keeps content (chevron, art, controls, queue) inside the safe area —
                 // the ArtBackdrop above stays full-bleed under the status/nav bars for the immersive look.
@@ -194,52 +236,26 @@ fun PlayerScreen(
                         count = working.size,
                         expanded = expanded,
                         onToggle = { expanded = !expanded },
-                        onClear = { connection.clearUpNext() },
                     )
                 }
                 if (expanded) {
-                    // Key by POSITION, not mediaId: the queue can hold the same track twice (add-to-queue /
-                    // play-next of an already-queued song), and duplicate LazyColumn keys crash Compose.
-                    itemsIndexed(working, key = { i, _ -> state.currentIndex + 1 + i }) { i, item ->
-                        // working drops the current + earlier items, so the absolute timeline index is offset.
-                        val absoluteIndex = state.currentIndex + 1 + i
-                        UpNextRow(
-                            item = item,
-                            dragged = dragFrom == i,
-                            dragOffsetPx = if (dragFrom == i) dragAccumPx else 0f,
-                            canMoveUp = i > 0,
-                            canMoveDown = i < working.lastIndex,
-                            onMeasured = { h -> if (h > 0) rowHeightPx = h },
-                            onPlay = { connection.playQueueItem(absoluteIndex) },
-                            onRemove = { connection.removeQueueItem(absoluteIndex) },
-                            // Accessible reorder (TalkBack/Switch Access can't drag): discrete one-step moves.
-                            onMoveUp = {
-                                working = moveItem(working, i, i - 1)
-                                connection.moveQueueItem(absoluteIndex, absoluteIndex - 1)
-                            },
-                            onMoveDown = {
-                                working = moveItem(working, i, i + 1)
-                                connection.moveQueueItem(absoluteIndex, absoluteIndex + 1)
-                            },
-                            onDragStart = { dragFrom = i; dragAccumPx = 0f },
-                            onDrag = { dy -> dragAccumPx += dy },
-                            onDragEnd = {
-                                val from = dragFrom
-                                if (from != null && stridePx > 0) {
-                                    val to = (from + (dragAccumPx / stridePx).roundToInt())
-                                        .coerceIn(0, working.lastIndex)
-                                    if (to != from) {
-                                        working = moveItem(working, from, to)
-                                        connection.moveQueueItem(
-                                            state.currentIndex + 1 + from,
-                                            state.currentIndex + 1 + to,
-                                        )
-                                    }
-                                }
-                                dragFrom = null
-                            },
-                            onDragCancel = { dragFrom = null },
-                        )
+                    // Keys stay position-based (duplicates legal) but get a section prefix so header
+                    // items never collide with row keys.
+                    if (pendingCount > 0) {
+                        item(key = "queue-header") {
+                            QueueSectionHeader("Next in queue ($pendingCount)") { connection.clearManualQueue() }
+                        }
+                    }
+                    itemsIndexed(working.take(pendingCount), key = { i, _ -> "q${state.currentIndex + 1 + i}" }) { i, item ->
+                        queueRow(i, item)
+                    }
+                    if (working.size > pendingCount) {
+                        item(key = "ctx-header") {
+                            QueueSectionHeader("Next up (${working.size - pendingCount})") { connection.clearUpNext() }
+                        }
+                    }
+                    itemsIndexed(working.drop(pendingCount), key = { i, _ -> "c${state.currentIndex + 1 + pendingCount + i}" }) { i, item ->
+                        queueRow(pendingCount + i, item)
                     }
                 }
             }
@@ -514,16 +530,27 @@ private fun EpisodeControls(state: PlayerUiState, connection: PlaybackConnection
 }
 
 @Composable
-private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit, onClear: () -> Unit) {
+private fun UpNextHeader(count: Int, expanded: Boolean, onToggle: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("Up next ($count)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-        if (count > 0) {
-            TextButton(onClick = onClear) { Text("Clear") }
-        }
         IconButton(onClick = onToggle) {
             if (expanded) Icon(Icons.Filled.ExpandLess, contentDescription = "Collapse")
             else Icon(Icons.Filled.ExpandMore, contentDescription = "Expand")
         }
+    }
+}
+
+/** Queue section subheader: tier label + its own Clear (queue and context clear independently). */
+@Composable
+private fun QueueSectionHeader(label: String, onClear: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onClear) { Text("Clear") }
     }
 }
 
