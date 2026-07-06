@@ -16,4 +16,6 @@ data class PersistedQueue(
     val positionMs: Long = 0L,
     val shuffleEnabled: Boolean = false,
     val repeatMode: AppRepeatMode = AppRepeatMode.OFF,
+    val manualFlags: List<Boolean> = emptyList(),
+    val originalOrder: List<String> = emptyList(),
 )

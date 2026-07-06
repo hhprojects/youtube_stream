@@ -60,4 +60,18 @@ class QueueSerializerTest {
         assertEquals(false, decoded.shuffleEnabled)
         assertEquals(AppRepeatMode.OFF, decoded.repeatMode)
     }
+
+    @Test
+    fun `round-trips manual flags and original order`() {
+        val q = sample.copy(manualFlags = listOf(false, true), originalOrder = listOf("id2"))
+        assertEquals(q, QueueSerializer.decode(QueueSerializer.encode(q)))
+    }
+
+    @Test
+    fun `legacy payload without flags decodes as all-context`() {
+        val legacy = """{"tracks":[{"mediaId":"x","uri":"u","title":"t","artist":"a"}],"currentIndex":0,"positionMs":0}"""
+        val decoded = QueueSerializer.decode(legacy)!!
+        assertEquals(emptyList<Boolean>(), decoded.manualFlags)
+        assertEquals(emptyList<String>(), decoded.originalOrder)
+    }
 }
