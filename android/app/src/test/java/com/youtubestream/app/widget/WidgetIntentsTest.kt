@@ -12,7 +12,7 @@ import org.junit.Test
 private class RecordingController : PlaybackController {
     override val state: StateFlow<PlayerUiState> = MutableStateFlow(PlayerUiState())
     val calls = mutableListOf<String>()
-    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long) { calls += "setQueueAndPlay" }
+    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long, shuffled: Boolean) { calls += "setQueueAndPlay" }
     override fun togglePlayPause() { calls += "togglePlayPause" }
     override fun next() { calls += "next" }
     override fun previous() { calls += "previous" }
@@ -27,6 +27,7 @@ private class RecordingController : PlaybackController {
     override fun moveQueueItem(from: Int, to: Int) { calls += "moveQueueItem" }
     override fun removeQueueItem(index: Int) { calls += "removeQueueItem" }
     override fun clearUpNext() { calls += "clearUpNext" }
+    override fun clearManualQueue() { calls += "clearManualQueue" }
     override fun setSleepTimer(durationMs: Long) { calls += "setSleepTimer" }
     override fun setSleepTimerEndOfTrack() { calls += "setSleepTimerEndOfTrack" }
     override fun cancelSleepTimer() { calls += "cancelSleepTimer" }

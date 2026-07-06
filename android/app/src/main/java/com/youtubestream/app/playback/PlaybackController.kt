@@ -9,7 +9,17 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface PlaybackController {
     val state: StateFlow<PlayerUiState>
-    fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int = 0, startPositionMs: Long = 0L)
+    /**
+     * Replace the playing context. A still-pending manual queue survives — it is re-inserted right
+     * after the new start item (Spotify semantics). [shuffled] = shuffle-play: random start track,
+     * the rest permuted, the shuffle toggle lit (un-shuffle restores the canonical order).
+     */
+    fun setQueueAndPlay(
+        tracks: List<PlayableTrack>,
+        startIndex: Int = 0,
+        startPositionMs: Long = 0L,
+        shuffled: Boolean = false,
+    )
     fun togglePlayPause()
     fun next()
     fun previous()
@@ -33,8 +43,10 @@ interface PlaybackController {
     fun moveQueueItem(from: Int, to: Int)
     /** Remove the queue item at [index]. */
     fun removeQueueItem(index: Int)
-    /** Clear the up-next list (everything after the current item); the current track keeps playing. */
+    /** Clear the upcoming context ("Next up", after the manual block); current track + queue stay. */
     fun clearUpNext()
+    /** Clear the manual "Next in queue" block; the current track and the upcoming context stay. */
+    fun clearManualQueue()
 
     // --- Sleep timer ---
     /** Pause playback after [durationMs] from now. Replaces any existing timer. */

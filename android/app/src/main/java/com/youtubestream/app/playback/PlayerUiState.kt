@@ -5,6 +5,7 @@ data class QueueItem(
     val mediaId: String,
     val title: String,
     val artist: String,
+    val isManual: Boolean = false,   // user-queued ("Next in queue") vs context ("Next up")
 )
 
 /** Everything the UI needs to render the player, derived from the Media3 controller. */

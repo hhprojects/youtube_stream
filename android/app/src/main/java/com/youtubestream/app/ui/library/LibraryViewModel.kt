@@ -47,9 +47,9 @@ class LibraryViewModel(
         controller.setQueueAndPlay(songs.map { it.toPlayableTrack() }, startIndex)
     }
 
-    /** Shuffle = play a pre-shuffled queue from the top (player shuffle-mode is untouched). */
+    /** Shuffle-play: random start + shuffled rest; the shuffle toggle lights up and un-shuffle restores order. */
     fun playShuffled(songs: List<LibrarySong>) {
-        controller.setQueueAndPlay(songs.shuffled().map { it.toPlayableTrack() }, 0)
+        controller.setQueueAndPlay(songs.map { it.toPlayableTrack() }, shuffled = true)
     }
 
     /** Insert one song right after the current track. */

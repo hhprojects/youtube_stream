@@ -103,9 +103,9 @@ class PlaylistDetailViewModel(
     fun play(list: List<LibrarySong>, startIndex: Int) =
         controller.setQueueAndPlay(list.map { it.toPlayableTrack() }, startIndex)
 
-    /** Shuffle = play a pre-shuffled queue from the top (player shuffle-mode is untouched). */
+    /** Shuffle-play: random start + shuffled rest; the shuffle toggle lights up and un-shuffle restores order. */
     fun shuffle(list: List<LibrarySong>) =
-        controller.setQueueAndPlay(list.shuffled().map { it.toPlayableTrack() }, 0)
+        controller.setQueueAndPlay(list.map { it.toPlayableTrack() }, shuffled = true)
 
     // ---- edit ops: only meaningful for a Manual source; no-ops otherwise (the UI also hides them) ----
     private val manualId: Long? get() = (source as? PlaylistSource.Manual)?.id

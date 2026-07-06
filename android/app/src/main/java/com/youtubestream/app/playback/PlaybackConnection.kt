@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /** How long to coalesce a burst of player events before writing the queue to disk. */
 private const val SAVE_DEBOUNCE_MS = 400L
@@ -57,11 +58,20 @@ class PlaybackConnection(
     private var controller: MediaController? = null
 
     /**
-     * Our copy of the queue we last set, in timeline order. The source of truth for track URIs:
-     * the controller hands back items with their URI stripped across the session boundary, so we
-     * cannot reconstruct the queue from it — we persist this instead.
+     * Our mirror of the controller timeline — track + manual flag per entry, in timeline order.
+     * Source of truth for URIs (the controller strips them across the session boundary) and for
+     * the two-tier queue flags. Persisted via QueueStore.
      */
-    private var currentQueue: List<PlayableTrack> = emptyList()
+    private var entries: List<QueueEntry> = emptyList()
+
+    /**
+     * App-managed shuffle. Media3's shuffleModeEnabled is NEVER used: its hidden permutation would
+     * bypass the manual block. Instead toggling shuffle permutes the context tail in the timeline
+     * itself, so the timeline (and the Up Next list) always IS the true play order.
+     */
+    private var shuffleOn = false
+    private var originalOrder: List<String> = emptyList()
+    private val random: Random = Random.Default
 
     /** Debounces queue/position writes so a burst of player events collapses into one save. */
     private var saveJob: Job? = null
@@ -143,7 +153,7 @@ class PlaybackConnection(
                 // on a missing LAST track (no-op skip → re-prepare same dead file → error again).
                 if (idx in 0 until c.mediaItemCount) {
                     c.removeMediaItem(idx)
-                    dropFromCurrentQueue(idx)   // keep our URI list aligned with the controller's timeline
+                    dropEntry(idx)   // keep our URI list aligned with the controller's timeline
                 }
                 c.prepare()
                 c.play()
@@ -196,13 +206,13 @@ class PlaybackConnection(
             positionMs = c.currentPosition.coerceAtLeast(0),
             durationMs = c.duration.coerceAtLeast(0),
             repeatMode = RepeatModeMapper.toApp(c.repeatMode),
-            shuffleEnabled = c.shuffleModeEnabled,
+            shuffleEnabled = shuffleOn,
             hasNext = c.hasNextMediaItem(),
             hasPrevious = c.hasPreviousMediaItem(),
-            queue = c.snapshotQueue(),
+            queue = c.snapshotQueue(entries),
             currentIndex = c.currentMediaItemIndex,
             playbackSpeed = c.playbackParameters.speed,
-            isPodcast = currentQueue.getOrNull(c.currentMediaItemIndex)?.isPodcast == true,
+            isPodcast = entries.getOrNull(c.currentMediaItemIndex)?.track?.isPodcast == true,
             sleepTimerEndsAtMs = sleepEndsAtMs,
             sleepAtTrackEnd = sleepAtTrackEnd,
         )
@@ -210,15 +220,18 @@ class PlaybackConnection(
 
     // --- Controls used by the UI ---
 
-    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long) {
+    override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long, shuffled: Boolean) {
         val c = controller ?: return
-        currentQueue = tracks
+        val plan = TwoTierQueue.buildSetQueue(entries, c.currentMediaItemIndex, tracks, startIndex, shuffled, random)
+        entries = plan.entries
+        shuffleOn = shuffled
+        originalOrder = plan.originalOrder
         // Media3 applies the start position atomically at prepare — no post-prepare seek race.
-        c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, startPositionMs)
+        c.setMediaItems(plan.entries.map { it.track.toMediaItem() }, plan.startIndex, startPositionMs)
         c.prepare()
         c.play()
         // A song queue plays at 1×; a podcast's chosen speed persists across episodes (don't reset it).
-        if (tracks.none { it.isPodcast }) c.setPlaybackSpeed(1f)
+        if (plan.entries.none { it.track.isPodcast }) c.setPlaybackSpeed(1f)
         saveNow()   // the high-value "new queue" event — persist now, don't risk the debounce window
     }
 
@@ -233,7 +246,28 @@ class PlaybackConnection(
 
     override fun toggleShuffle() {
         val c = controller ?: return
-        c.shuffleModeEnabled = !c.shuffleModeEnabled
+        if (entries.isEmpty()) return
+        if (!shuffleOn) {
+            val plan = TwoTierQueue.shuffleTail(entries, c.currentMediaItemIndex, random)
+            originalOrder = entries.drop(plan.tailStart).map { it.track.mediaId }
+            applyTail(c, plan)
+            shuffleOn = true
+        } else {
+            val plan = TwoTierQueue.unshuffleTail(entries, c.currentMediaItemIndex, originalOrder)
+            applyTail(c, plan)
+            shuffleOn = false
+            originalOrder = emptyList()
+        }
+        pushState()
+        saveNow()
+    }
+
+    /** Replaces the upcoming-context tail (everything after the manual block) in one remove+add. */
+    private fun applyTail(c: MediaController, plan: TwoTierQueue.TailPlan) {
+        if (plan.tailStart >= c.mediaItemCount) return   // nothing after the block
+        c.removeMediaItems(plan.tailStart, c.mediaItemCount)
+        c.addMediaItems(plan.newTail.map { it.track.toMediaItem() })
+        entries = entries.take(plan.tailStart) + plan.newTail
     }
 
     override fun cycleRepeat() {
@@ -250,14 +284,15 @@ class PlaybackConnection(
     }
 
     // --- Queue insertion. Append / play-next; if the queue is empty, start a fresh queue + play so the
-    // action is never a silent no-op. Keep `currentQueue` aligned; saveNow() persists the high-value edit. ---
+    // action is never a silent no-op. Keep `entries` aligned; saveNow() persists the high-value edit. ---
 
     override fun addToQueue(tracks: List<PlayableTrack>) {
         val c = controller ?: return
         if (tracks.isEmpty()) return
         if (c.mediaItemCount == 0) { setQueueAndPlay(tracks); return }
-        c.addMediaItems(tracks.map { it.toMediaItem() })
-        currentQueue = currentQueue + tracks
+        val at = TwoTierQueue.addToQueueIndex(entries, c.currentMediaItemIndex).coerceAtMost(c.mediaItemCount)
+        c.addMediaItems(at, tracks.map { it.toMediaItem() })
+        entries = entries.toMutableList().apply { addAll(at, tracks.map { QueueEntry(it, isManual = true) }) }
         saveNow()
     }
 
@@ -265,29 +300,37 @@ class PlaybackConnection(
         val c = controller ?: return
         if (tracks.isEmpty()) return
         if (c.mediaItemCount == 0) { setQueueAndPlay(tracks); return }
-        val at = (c.currentMediaItemIndex + 1).coerceIn(0, c.mediaItemCount)
+        val at = TwoTierQueue.playNextIndex(c.currentMediaItemIndex).coerceIn(0, c.mediaItemCount)
         c.addMediaItems(at, tracks.map { it.toMediaItem() })
-        currentQueue = currentQueue.toMutableList().apply { addAll(at, tracks) }
+        entries = entries.toMutableList().apply { addAll(at, tracks.map { QueueEntry(it, isManual = true) }) }
         saveNow()
     }
 
-    // --- Queue editing. Each keeps `currentQueue` aligned with the controller's timeline; the
+    // --- Queue editing. Each keeps `entries` aligned with the controller's timeline; the
     // resulting timeline/transition events drive pushState + a debounced save automatically. ---
 
     override fun playQueueItem(index: Int) {
         val c = controller ?: return
-        if (index in 0 until c.mediaItemCount) {
-            c.seekToDefaultPosition(index)
-            c.play()
+        if (index !in 0 until c.mediaItemCount) return
+        val plan = TwoTierQueue.jumpPlan(entries, c.currentMediaItemIndex, index)
+        if (plan.moveCount > 0) {
+            // Pull the manual block along so queued songs still play right after the tapped item.
+            c.moveMediaItems(plan.moveFrom, plan.moveFrom + plan.moveCount, plan.moveNewIndex)
+            val m = entries.toMutableList()
+            val block = List(plan.moveCount) { m.removeAt(plan.moveFrom) }
+            m.addAll(plan.moveNewIndex, block)
+            entries = m
         }
+        c.seekToDefaultPosition(plan.seekIndex)
+        c.play()
     }
 
     override fun moveQueueItem(from: Int, to: Int) {
         val c = controller ?: return
         val count = c.mediaItemCount
         if (from in 0 until count && to in 0 until count && from != to) {
+            entries = TwoTierQueue.move(entries, c.currentMediaItemIndex, from, to)
             c.moveMediaItem(from, to)
-            currentQueue = currentQueue.toMutableList().apply { add(to, removeAt(from)) }
         }
     }
 
@@ -295,16 +338,26 @@ class PlaybackConnection(
         val c = controller ?: return
         if (index in 0 until c.mediaItemCount) {
             c.removeMediaItem(index)
-            dropFromCurrentQueue(index)
+            dropEntry(index)
         }
     }
 
     override fun clearUpNext() {
         val c = controller ?: return
-        val from = c.currentMediaItemIndex + 1
+        val from = c.currentMediaItemIndex + 1 + TwoTierQueue.pendingCount(entries, c.currentMediaItemIndex)
         if (from in 1 until c.mediaItemCount) {
             c.removeMediaItems(from, c.mediaItemCount)
-            currentQueue = currentQueue.take(from)
+            entries = entries.take(from)
+        }
+    }
+
+    override fun clearManualQueue() {
+        val c = controller ?: return
+        val cur = c.currentMediaItemIndex
+        val count = TwoTierQueue.pendingCount(entries, cur)
+        if (count > 0) {
+            c.removeMediaItems(cur + 1, cur + 1 + count)
+            entries = entries.take(cur + 1) + entries.drop(cur + 1 + count)
         }
     }
 
@@ -344,7 +397,9 @@ class PlaybackConnection(
         val c = controller ?: return
         c.stop()                                  // halt playback
         c.clearMediaItems()                       // empty the timeline → currentMediaItem becomes null
-        currentQueue = emptyList()                // keep our URI list aligned with the controller
+        entries = emptyList()
+        shuffleOn = false
+        originalOrder = emptyList()
         sleepJob?.cancel(); sleepJob = null; sleepEndsAtMs = null; sleepAtTrackEnd = false
         saveJob?.cancel()                         // cancel any debounced save the clear events would trigger
         scope.launch { queueStore.clear() }       // forget the persisted session on disk
@@ -387,19 +442,21 @@ class PlaybackConnection(
     /** The queue + current position to persist, or null when there's nothing worth saving. */
     private fun currentSnapshot(): PersistedQueue? {
         val c = controller ?: return null
-        if (currentQueue.isEmpty()) return null
+        if (entries.isEmpty()) return null
         return PersistedQueue(
-            tracks = currentQueue,
-            currentIndex = c.currentMediaItemIndex.coerceIn(0, currentQueue.lastIndex),
+            tracks = entries.map { it.track },
+            currentIndex = c.currentMediaItemIndex.coerceIn(0, entries.lastIndex),
             positionMs = c.currentPosition.coerceAtLeast(0L),
-            shuffleEnabled = c.shuffleModeEnabled,
+            shuffleEnabled = shuffleOn,
             repeatMode = RepeatModeMapper.toApp(c.repeatMode),
+            manualFlags = entries.map { it.isManual },
+            originalOrder = originalOrder,
         )
     }
 
-    private fun dropFromCurrentQueue(index: Int) {
-        if (index in currentQueue.indices) {
-            currentQueue = currentQueue.toMutableList().apply { removeAt(index) }
+    private fun dropEntry(index: Int) {
+        if (index in entries.indices) {
+            entries = entries.toMutableList().apply { removeAt(index) }
         }
     }
 
@@ -420,10 +477,14 @@ class PlaybackConnection(
                 val saved = queueStore.load()
                 // mediaItemCount == 0 guard: a song may have been picked while load() suspended — don't clobber.
                 if (saved != null && saved.tracks.isNotEmpty() && c.mediaItemCount == 0) {
-                    currentQueue = saved.tracks
-                    // Re-apply the saved modes before the queue: a fresh ExoPlayer defaults both to
-                    // off, and any queue set afterwards (this restore or a new pick) inherits them.
-                    c.shuffleModeEnabled = saved.shuffleEnabled
+                    entries = saved.tracks.mapIndexed { i, t ->
+                        QueueEntry(t, isManual = saved.manualFlags.getOrNull(i) == true)
+                    }
+                    shuffleOn = saved.shuffleEnabled
+                    originalOrder = saved.originalOrder
+                    // Repeat is re-applied on the controller (a fresh ExoPlayer defaults it off).
+                    // Shuffle is app-managed now: the persisted timeline already IS the play order,
+                    // so the controller's shuffleModeEnabled is never touched.
                     c.repeatMode = RepeatModeMapper.toPlayer(saved.repeatMode)
                     val startIndex = saved.currentIndex.coerceIn(0, saved.tracks.lastIndex)
                     c.setMediaItems(
@@ -451,13 +512,14 @@ class PlaybackConnection(
     }
 }
 
-private fun MediaController.snapshotQueue(): List<QueueItem> =
+private fun MediaController.snapshotQueue(entries: List<QueueEntry>): List<QueueItem> =
     (0 until mediaItemCount).map { i ->
         val item = getMediaItemAt(i)
         QueueItem(
             mediaId = item.mediaId,
             title = item.mediaMetadata.title?.toString().orEmpty(),
             artist = item.mediaMetadata.artist?.toString().orEmpty(),
+            isManual = entries.getOrNull(i)?.isManual == true,   // defensive zip; sizes match by construction
         )
     }
 

@@ -29,8 +29,8 @@ data class WidgetModel(
             isPlaying = state.isPlaying,
             shuffleOn = state.shuffleEnabled,
             repeatMode = state.repeatMode,
-            // Timeline-order next track. Note: with shuffle on this is not the true play-order next
-            // (the shuffle order is not exposed in PlayerUiState) — accepted for v1 per the spec.
+            // Timeline-order next track — which IS the true play order now that shuffle is
+            // app-managed in the timeline itself (Media3 shuffleModeEnabled is never used).
             upNextTitle = state.queue.getOrNull(state.currentIndex + 1)?.title?.takeIf { it.isNotBlank() },
         )
     }
