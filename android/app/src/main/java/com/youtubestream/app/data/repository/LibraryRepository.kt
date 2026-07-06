@@ -31,9 +31,9 @@ class LibraryRepository(
         dao.deleteByIds(songs.map { it.id })
     }
 
-    /** Updates one song's artwork by re-inserting it (REPLACE). Called after a successful Pi edit. */
-    suspend fun setArtwork(song: LibrarySong, artworkUrl: String?) {
-        dao.insert(song.copy(artworkUrl = artworkUrl))
+    /** Re-inserts an edited row (REPLACE on the same PK). Called after the matching Pi edit succeeded. */
+    suspend fun update(song: LibrarySong) {
+        dao.insert(song)
     }
 
     /** Clears artwork on every row (the one-time "reset to placeholder" cleanup). */

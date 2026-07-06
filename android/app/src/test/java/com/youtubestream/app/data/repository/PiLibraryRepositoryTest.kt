@@ -67,4 +67,21 @@ class PiLibraryRepositoryTest {
         assertEquals("http://i/new.jpg", thumb)
         server.shutdown()
     }
+
+    @Test
+    fun updateTitlePostsToTheTitleRoute() = runTest {
+        val server = MockWebServer().apply { start() }
+        server.enqueue(MockResponse().setBody("""{"success":true,"title":"New"}"""))
+        val json = Json { ignoreUnknownKeys = true }
+        val api = Retrofit.Builder().baseUrl(server.url("/"))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build().create(YoutubeStreamApi::class.java)
+
+        PiLibraryRepository(api).updateTitle("s1.m4a", "New")
+
+        val req = server.takeRequest()
+        assertEquals("/api/library/s1.m4a/title", req.path)
+        assertEquals("""{"title":"New"}""", req.body.readUtf8())
+        server.shutdown()
+    }
 }

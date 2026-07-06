@@ -115,22 +115,35 @@ class LibraryViewModel(
     }
 
     /**
-     * Swaps a song's artwork to the thumbnail of a pasted YouTube URL. Pi-first (like deleteEverywhere):
-     * persist on the Pi so it survives re-import + reaches other devices, then mirror into Room. A bad URL
-     * or a Pi failure surfaces as a one-shot error; the local row is left untouched.
+     * Applies the Edit-song dialog: an edited title and/or a pasted artwork URL. Pi-first per field
+     * (like deleteEverywhere) so edits survive re-import and reach other devices; the local row then
+     * mirrors whatever succeeded — on a partial failure (title saved, artwork threw) the successful
+     * field is still mirrored. A bad URL or a Pi failure surfaces as a one-shot error.
      */
-    fun editArtwork(song: LibrarySong, url: String) {
-        val videoId = YouTubeUrl.extractVideoId(url)
-        if (videoId == null) {
+    fun editSong(song: LibrarySong, newTitle: String, artworkUrl: String) {
+        val title = newTitle.trim()
+        val titleChanged = title.isNotEmpty() && title != song.title
+        val videoId = if (artworkUrl.isBlank()) null else YouTubeUrl.extractVideoId(artworkUrl)
+        if (artworkUrl.isNotBlank() && videoId == null) {
             _errors.tryEmit("That doesn't look like a YouTube link.")
             return
         }
+        if (!titleChanged && videoId == null) return
         viewModelScope.launch {
+            var updated = song
             try {
-                val thumbnail = pi.updateArtwork(song.filename, videoId)
-                library.setArtwork(song, thumbnail)
+                if (titleChanged) {
+                    pi.updateTitle(song.filename, title)
+                    updated = updated.copy(title = title)
+                }
+                if (videoId != null) {
+                    val thumbnail = pi.updateArtwork(song.filename, videoId)
+                    updated = updated.copy(artworkUrl = thumbnail)
+                }
             } catch (e: Exception) {
-                _errors.tryEmit(e.message ?: "Couldn't update artwork on the Pi")
+                _errors.tryEmit(e.message ?: "Couldn't save the edit on the Pi")
+            } finally {
+                if (updated != song) library.update(updated)
             }
         }
     }

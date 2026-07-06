@@ -56,3 +56,9 @@ data class ArtworkRequestDto(val videoId: String)
 
 @Serializable
 data class ArtworkResponseDto(val success: Boolean, val thumbnail: String? = null)
+
+@Serializable
+data class TitleRequestDto(val title: String)
+
+@Serializable
+data class TitleResponseDto(val success: Boolean, val title: String? = null)

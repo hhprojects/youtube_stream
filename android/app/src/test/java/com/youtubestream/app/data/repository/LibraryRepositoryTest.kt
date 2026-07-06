@@ -51,14 +51,15 @@ class LibraryRepositoryTest {
     }
 
     @Test
-    fun setArtworkInsertsRowWithNewUrl() = runTest {
+    fun updateReplacesRowWithEditedFields() = runTest {
         val song = LibrarySong("id1", "T", "A", 1, "f.m4a", "/p/f.m4a", 1L, 1L)
         val dao = FakeDao()
         val repo = LibraryRepository(dao)
 
-        repo.setArtwork(song, "http://i/new.jpg")
+        repo.update(song.copy(title = "New", artworkUrl = "http://i/new.jpg"))
 
-        assertEquals("http://i/new.jpg", dao.songs.value.last().artworkUrl)
+        assertEquals("New", dao.songs.value.single().title)
+        assertEquals("http://i/new.jpg", dao.songs.value.single().artworkUrl)
     }
 
     @Test

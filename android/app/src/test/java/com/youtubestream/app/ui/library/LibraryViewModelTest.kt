@@ -8,6 +8,8 @@ import com.youtubestream.app.data.remote.dto.ArtworkResponseDto
 import com.youtubestream.app.data.remote.dto.DeleteResponseDto
 import com.youtubestream.app.data.remote.dto.DownloadRequestDto
 import com.youtubestream.app.data.remote.dto.SearchRequestDto
+import com.youtubestream.app.data.remote.dto.TitleRequestDto
+import com.youtubestream.app.data.remote.dto.TitleResponseDto
 import com.youtubestream.app.data.repository.LibraryRepository
 import com.youtubestream.app.data.repository.PiLibraryRepository
 import com.youtubestream.app.playback.PlayableTrack
@@ -42,7 +44,8 @@ class LibraryViewModelTest {
         val songs = MutableStateFlow(initial)
         override fun observeAll(): Flow<List<LibrarySong>> = songs
         override suspend fun exists(id: String) = songs.value.any { it.id == id }
-        override suspend fun insert(song: LibrarySong) = songs.update { it + song }
+        // Mirrors the real DAO's @Insert(onConflict = REPLACE) so an edit-and-reinsert collapses to one row.
+        override suspend fun insert(song: LibrarySong) = songs.update { l -> l.filterNot { it.id == song.id } + song }
         override suspend fun deleteById(id: String) = songs.update { l -> l.filterNot { it.id == id } }
         override suspend fun deleteByIds(ids: List<String>) = songs.update { l -> l.filterNot { it.id in ids } }
         override suspend fun clearAllArtwork() = songs.update { list -> list.map { it.copy(artworkUrl = null) } }
@@ -79,16 +82,18 @@ class LibraryViewModelTest {
 
     private fun song(id: String) = LibrarySong(id, "T$id", "A$id", 0, "$id.m4a", "/songs/$id.m4a", 1L, 1L)
 
-    /** A Pi repo backed by a fake api; [onDelete]/[onUpdateArtwork] record/control those calls. */
+    /** A Pi repo backed by a fake api; [onDelete]/[onUpdateArtwork]/[onUpdateTitle] record/control those calls. */
     private fun piRepo(
         onDelete: suspend (String) -> DeleteResponseDto = { error("unused") },
         onUpdateArtwork: suspend (String, ArtworkRequestDto) -> ArtworkResponseDto = { _, _ -> error("unused") },
+        onUpdateTitle: suspend (String, TitleRequestDto) -> TitleResponseDto = { _, _ -> error("unused") },
     ) = PiLibraryRepository(object : YoutubeStreamApi {
         override suspend fun search(body: SearchRequestDto) = error("unused")
         override suspend fun download(body: DownloadRequestDto) = error("unused")
         override suspend fun library() = error("unused")
         override suspend fun deleteFromPi(filename: String) = onDelete(filename)
         override suspend fun updateArtwork(filename: String, body: ArtworkRequestDto) = onUpdateArtwork(filename, body)
+        override suspend fun updateTitle(filename: String, body: TitleRequestDto) = onUpdateTitle(filename, body)
     })
 
     @Test fun exposesLibraryAsContent() = runTest {
@@ -210,24 +215,75 @@ class LibraryViewModelTest {
         assertEquals(listOf("1 of 2 removed from the server"), errors)   // exact summary text + count
     }
 
-    @Test fun editArtworkRejectsNonYoutubeUrl() = runTest {
+    @Test fun editSongRejectsNonYoutubeArtworkUrl() = runTest {
         val dao = FakeDao(listOf(song("a")))
         val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), piRepo(), FakeController())
         val errors = mutableListOf<String>()
         backgroundScope.launch { vm.errors.collect { errors += it } }
         runCurrent()
-        vm.editArtwork(song("a"), "not a youtube link")
+        vm.editSong(song("a"), newTitle = song("a").title, artworkUrl = "not a youtube link")
         runCurrent()
         assertEquals(1, errors.size)                          // user told it's not a link
         assertNull(dao.songs.value.single().artworkUrl)       // nothing written
     }
 
-    @Test fun editArtworkPersistsResolvedThumbnail() = runTest {
+    @Test fun editSongSavesTitleOnPiThenLocally() = runTest {
+        val titles = mutableListOf<String>()
+        val dao = FakeDao(listOf(song("a")))
+        val pi = piRepo(onUpdateTitle = { filename, body ->
+            titles += "$filename:${body.title}"; TitleResponseDto(true, body.title)
+        })
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        vm.editSong(song("a"), newTitle = "Corrected", artworkUrl = "")
+        runCurrent()
+        assertEquals(listOf("a.m4a:Corrected"), titles)                 // Pi hit with filename + new title
+        assertEquals("Corrected", dao.songs.value.single().title)      // mirrored into Room
+    }
+
+    @Test fun editSongSavesArtworkViaPi() = runTest {
         val dao = FakeDao(listOf(song("a")))
         val pi = piRepo(onUpdateArtwork = { _, _ -> ArtworkResponseDto(true, "http://i/new.jpg") })
         val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
-        vm.editArtwork(song("a"), "https://youtu.be/dQw4w9WgXcQ")
+        vm.editSong(song("a"), newTitle = song("a").title, artworkUrl = "https://youtu.be/dQw4w9WgXcQ")
         runCurrent()
-        assertEquals("http://i/new.jpg", dao.songs.value.last().artworkUrl)   // Pi result saved to Room
+        assertEquals("http://i/new.jpg", dao.songs.value.single().artworkUrl)
+    }
+
+    @Test fun editSongKeepsLocalWhenPiFails() = runTest {
+        val dao = FakeDao(listOf(song("a")))
+        val pi = piRepo(onUpdateTitle = { _, _ -> throw RuntimeException("Pi offline") })
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
+        vm.editSong(song("a"), newTitle = "Corrected", artworkUrl = "")
+        runCurrent()
+        assertEquals("Ta", dao.songs.value.single().title)   // local row untouched — Pi failed first
+        assertEquals(1, errors.size)
+    }
+
+    @Test fun editSongMirrorsTitleWhenArtworkFails() = runTest {
+        val dao = FakeDao(listOf(song("a")))
+        val pi = piRepo(
+            onUpdateTitle = { _, body -> TitleResponseDto(true, body.title) },
+            onUpdateArtwork = { _, _ -> throw RuntimeException("Pi hiccup") },
+        )
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
+        vm.editSong(song("a"), newTitle = "Corrected", artworkUrl = "https://youtu.be/dQw4w9WgXcQ")
+        runCurrent()
+        assertEquals("Corrected", dao.songs.value.single().title)   // the part that succeeded IS mirrored
+        assertNull(dao.songs.value.single().artworkUrl)
+        assertEquals(1, errors.size)
+    }
+
+    @Test fun editSongNoopWhenNothingChanged() = runTest {
+        val dao = FakeDao(listOf(song("a")))
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), piRepo(), FakeController())  // pi errors if touched
+        vm.editSong(song("a"), newTitle = song("a").title, artworkUrl = "")
+        runCurrent()
+        assertEquals(1, dao.songs.value.size)   // no crash, no write, pi untouched
     }
 }

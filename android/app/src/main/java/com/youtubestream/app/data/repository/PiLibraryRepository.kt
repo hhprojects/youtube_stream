@@ -4,6 +4,7 @@ import com.youtubestream.app.data.model.PiSong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
 import com.youtubestream.app.data.remote.dto.ArtworkRequestDto
 import com.youtubestream.app.data.remote.dto.LibrarySongDto
+import com.youtubestream.app.data.remote.dto.TitleRequestDto
 
 class PiLibraryRepository(private val api: YoutubeStreamApi) {
     suspend fun piLibrary(): List<PiSong> = api.library().songs.map { it.toDomain() }
@@ -19,6 +20,12 @@ class PiLibraryRepository(private val api: YoutubeStreamApi) {
         val resp = api.updateArtwork(filename, ArtworkRequestDto(videoId))
         if (!resp.success) error("The Pi reported the artwork update failed")
         return resp.thumbnail
+    }
+
+    /** Saves an edited title into the Pi's sidecar so re-imports keep it. Throws on failure. */
+    suspend fun updateTitle(filename: String, title: String) {
+        val resp = api.updateTitle(filename, TitleRequestDto(title))
+        if (!resp.success) error("The Pi reported the title update failed")
     }
 }
 

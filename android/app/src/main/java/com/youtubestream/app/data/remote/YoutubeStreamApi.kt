@@ -8,6 +8,8 @@ import com.youtubestream.app.data.remote.dto.DownloadResponseDto
 import com.youtubestream.app.data.remote.dto.LibraryResponseDto
 import com.youtubestream.app.data.remote.dto.SearchRequestDto
 import com.youtubestream.app.data.remote.dto.SearchResponseDto
+import com.youtubestream.app.data.remote.dto.TitleRequestDto
+import com.youtubestream.app.data.remote.dto.TitleResponseDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -35,4 +37,11 @@ interface YoutubeStreamApi {
         @Path("filename") filename: String,
         @Body body: ArtworkRequestDto,
     ): ArtworkResponseDto
+
+    /** Persists an edited display title into the Pi's metadata sidecar; non-2xx → HttpException. */
+    @POST("api/library/{filename}/title")
+    suspend fun updateTitle(
+        @Path("filename") filename: String,
+        @Body body: TitleRequestDto,
+    ): TitleResponseDto
 }

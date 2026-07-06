@@ -254,7 +254,7 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }
             },
             confirmButton = {
-                TextButton(enabled = videoId != null, onClick = { vm.editArtwork(song, url); editing = null }) {
+                TextButton(enabled = videoId != null, onClick = { vm.editSong(song, song.title, url); editing = null }) {
                     Text("Update")
                 }
             },

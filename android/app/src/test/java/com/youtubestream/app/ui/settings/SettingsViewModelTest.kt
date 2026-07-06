@@ -56,6 +56,7 @@ class SettingsViewModelTest {
         override suspend fun library() = onLibrary()
         override suspend fun deleteFromPi(filename: String) = error("unused")
         override suspend fun updateArtwork(filename: String, body: com.youtubestream.app.data.remote.dto.ArtworkRequestDto) = error("unused")
+        override suspend fun updateTitle(filename: String, body: com.youtubestream.app.data.remote.dto.TitleRequestDto) = error("unused")
     })
 
     @Test fun saveUpdatesTheSource() = runTest {

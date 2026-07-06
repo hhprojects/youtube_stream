@@ -55,6 +55,7 @@ class ImportViewModelTest {
         override suspend fun library() = onLibrary()
         override suspend fun deleteFromPi(filename: String) = onDelete(filename)
         override suspend fun updateArtwork(filename: String, body: com.youtubestream.app.data.remote.dto.ArtworkRequestDto) = error("unused")
+        override suspend fun updateTitle(filename: String, body: com.youtubestream.app.data.remote.dto.TitleRequestDto) = error("unused")
     }
 
     private class FakeDao(initial: List<LibrarySong> = emptyList()) : LibraryDao {
