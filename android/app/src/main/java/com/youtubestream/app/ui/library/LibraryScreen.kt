@@ -191,7 +191,7 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                             Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
                                         },
                                         onAddToPlaylist = { addingTo = song },
-                                        onEditArtwork = { editing = song },
+                                        onEdit = { editing = song },
                                         onDelete = { pendingDelete = song },
                                     )
                                 },
@@ -230,14 +230,24 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     }
 
     editing?.let { song ->
+        var title by remember(song) { mutableStateOf(song.title) }
         var url by remember(song) { mutableStateOf("") }
         val videoId = YouTubeUrl.extractVideoId(url)
         AlertDialog(
             onDismissRequest = { editing = null },
-            title = { Text("Edit artwork") },
+            title = { Text("Edit song") },
             text = {
                 Column {
-                    Text("Paste a YouTube link — the artwork becomes that video's thumbnail.")
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        singleLine = true,
+                        label = { Text("Title") },
+                        isError = title.isBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Artwork: paste a YouTube link to use that video's thumbnail (optional).")
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = url,
@@ -254,8 +264,11 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }
             },
             confirmButton = {
-                TextButton(enabled = videoId != null, onClick = { vm.editSong(song, song.title, url); editing = null }) {
-                    Text("Update")
+                TextButton(
+                    enabled = title.isNotBlank() && (url.isBlank() || videoId != null),
+                    onClick = { vm.editSong(song, title, url); editing = null },
+                ) {
+                    Text("Save")
                 }
             },
             dismissButton = {
@@ -301,13 +314,13 @@ fun LibraryScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Per-row overflow: Play next / Add to queue / Add to playlist / Edit artwork / Delete (replaces 3 icons). */
+/** Per-row overflow: Play next / Add to queue / Add to playlist / Edit song / Delete (replaces 3 icons). */
 @Composable
 private fun SongActionsMenu(
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onAddToPlaylist: () -> Unit,
-    onEditArtwork: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -319,7 +332,7 @@ private fun SongActionsMenu(
             DropdownMenuItem(text = { Text("Play next") }, onClick = { open = false; onPlayNext() })
             DropdownMenuItem(text = { Text("Add to queue") }, onClick = { open = false; onAddToQueue() })
             DropdownMenuItem(text = { Text("Add to playlist") }, onClick = { open = false; onAddToPlaylist() })
-            DropdownMenuItem(text = { Text("Edit artwork") }, onClick = { open = false; onEditArtwork() })
+            DropdownMenuItem(text = { Text("Edit song") }, onClick = { open = false; onEdit() })
             DropdownMenuItem(
                 text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                 onClick = { open = false; onDelete() },
