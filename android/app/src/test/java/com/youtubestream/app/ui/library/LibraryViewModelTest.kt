@@ -1,5 +1,6 @@
 package com.youtubestream.app.ui.library
 
+import androidx.lifecycle.viewModelScope
 import com.youtubestream.app.data.local.LibraryDao
 import com.youtubestream.app.data.local.LibrarySong
 import com.youtubestream.app.data.remote.YoutubeStreamApi
@@ -17,6 +18,8 @@ import com.youtubestream.app.playback.PlaybackController
 import com.youtubestream.app.playback.PlayerUiState
 import com.youtubestream.app.ui.UiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -285,5 +288,20 @@ class LibraryViewModelTest {
         vm.editSong(song("a"), newTitle = song("a").title, artworkUrl = "")
         runCurrent()
         assertEquals(1, dao.songs.value.size)   // no crash, no write, pi untouched
+    }
+
+    @Test fun editSongCancellationEmitsNoError() = runTest {
+        val dao = FakeDao(listOf(song("a")))
+        val pi = piRepo(onUpdateTitle = { _, _ -> awaitCancellation() })
+        val vm = LibraryViewModel(LibraryRepository(dao, dispatcher), pi, FakeController())
+        val errors = mutableListOf<String>()
+        backgroundScope.launch { vm.errors.collect { errors += it } }
+        runCurrent()
+        vm.editSong(song("a"), newTitle = "Corrected", artworkUrl = "")
+        runCurrent()                                        // now suspended inside the Pi call
+        vm.viewModelScope.cancel()
+        runCurrent()
+        assertEquals(emptyList<String>(), errors)           // no spurious "Pi failure" on cancellation
+        assertEquals("Ta", dao.songs.value.single().title)  // nothing half-mirrored
     }
 }

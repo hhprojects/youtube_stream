@@ -9,6 +9,8 @@ import com.youtubestream.app.data.util.YouTubeUrl
 import com.youtubestream.app.playback.PlaybackController
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.selection.SelectionState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LibraryViewModel(
     private val library: LibraryRepository,
@@ -140,10 +143,14 @@ class LibraryViewModel(
                     val thumbnail = pi.updateArtwork(song.filename, videoId)
                     updated = updated.copy(artworkUrl = thumbnail)
                 }
+            } catch (c: CancellationException) {
+                throw c                     // cancellation is not a Pi failure — never surface it as one
             } catch (e: Exception) {
                 _errors.tryEmit(e.message ?: "Couldn't save the edit on the Pi")
             } finally {
-                if (updated != song) library.update(updated)
+                // Mirror whatever DID succeed on the Pi even if the scope is being torn down —
+                // otherwise a cancelled screen leaves Room stale behind the Pi sidecar.
+                if (updated != song) withContext(NonCancellable) { library.update(updated) }
             }
         }
     }
