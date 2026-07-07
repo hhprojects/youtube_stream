@@ -38,4 +38,14 @@ class YouTubeUrlTest {
         assertNull(YouTubeUrl.extractVideoId("   "))
         assertNull(YouTubeUrl.extractVideoId("abc123"))   // too short to be an id
     }
+
+    @Test
+    fun watchUrlBuildsTheCanonicalWatchLink() {
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", YouTubeUrl.watchUrl("dQw4w9WgXcQ"))
+    }
+
+    @Test
+    fun watchUrlRoundTripsWithExtractVideoId() {
+        assertEquals("dQw4w9WgXcQ", YouTubeUrl.extractVideoId(YouTubeUrl.watchUrl("dQw4w9WgXcQ")))
+    }
 }

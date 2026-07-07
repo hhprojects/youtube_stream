@@ -19,4 +19,7 @@ object YouTubeUrl {
         if (BARE_ID.matches(s)) return s
         return null
     }
+
+    /** Canonical watch URL for a video id — the inverse of [extractVideoId]. Feeds "Copy link". */
+    fun watchUrl(videoId: String): String = "https://www.youtube.com/watch?v=$videoId"
 }
