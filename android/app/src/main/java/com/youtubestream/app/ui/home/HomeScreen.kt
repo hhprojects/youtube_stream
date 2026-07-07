@@ -79,4 +79,4 @@ fun HomeScreen(onOpenMood: (String, String) -> Unit, onOpenGenre: (String, Strin
 }
 
 private fun com.youtubestream.app.data.local.LibrarySong.toCard() =
-    ShelfCardUi(key = id, title = title, artist = artist, artworkUrl = artworkUrl)
+    ShelfCardUi(key = id, title = title, artist = artist, artworkUrl = artworkUrl, videoId = videoId)

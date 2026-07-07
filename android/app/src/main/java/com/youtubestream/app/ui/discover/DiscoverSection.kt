@@ -19,7 +19,7 @@ import com.youtubestream.app.data.model.MoodCategory
 import com.youtubestream.app.ui.home.ShelfCardRow
 import com.youtubestream.app.ui.home.ShelfCardUi
 
-private fun DiscoverySong.toCard() = ShelfCardUi(key = videoId, title = title, artist = artist, artworkUrl = thumbnailUrl)
+private fun DiscoverySong.toCard() = ShelfCardUi(key = videoId, title = title, artist = artist, artworkUrl = thumbnailUrl, videoId = videoId)
 
 /** Appends the Discover rows to the Home LazyColumn. Renders nothing when Hidden. */
 fun LazyListScope.discoverSection(

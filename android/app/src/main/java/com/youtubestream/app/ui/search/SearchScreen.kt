@@ -1,6 +1,7 @@
 package com.youtubestream.app.ui.search
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,17 +39,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.youtubestream.app.data.model.SearchResult
 import com.youtubestream.app.data.network.allowsPiActions
+import com.youtubestream.app.data.util.YouTubeUrl
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
 import com.youtubestream.app.ui.components.ServerStatusBanner
 import com.youtubestream.app.ui.playlist.AddToPlaylistSheet
+import com.youtubestream.app.ui.util.copyToClipboard
 
 @Composable
 fun SearchScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
@@ -182,7 +188,22 @@ private fun ResultRow(
     onDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            // Long-press copies the result's watch URL (SearchResult.id IS the videoId). Tap stays
+            // a no-op — download/add live on the trailing controls.
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    copyToClipboard(context, "YouTube link", YouTubeUrl.watchUrl(result.id))
+                },
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         AsyncImage(
             model = result.thumbnailUrl,
             contentDescription = null,
