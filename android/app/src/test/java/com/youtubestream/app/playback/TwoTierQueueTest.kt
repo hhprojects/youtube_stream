@@ -182,4 +182,27 @@ class TwoTierQueueTest {
         val plan = TwoTierQueue.unshuffleTail(q, 0, originalOrder = listOf("a", "a", "b"))
         assertEquals(listOf("a", "a", "b"), plan.newTail.map { it.track.mediaId })
     }
+
+    // --- effectiveShuffle: sticky-shuffle policy for a new queue ---
+
+    @Test fun `explicit shuffle request always wins`() {
+        assertTrue(TwoTierQueue.effectiveShuffle(requested = true, shuffleOn = false, context = listOf(track("a"))))
+    }
+
+    @Test fun `a lit toggle carries over to a music queue`() {
+        assertTrue(TwoTierQueue.effectiveShuffle(requested = false, shuffleOn = true, context = listOf(track("a"), track("b"))))
+    }
+
+    @Test fun `toggle off and no request stays natural`() {
+        assertFalse(TwoTierQueue.effectiveShuffle(requested = false, shuffleOn = false, context = listOf(track("a"))))
+    }
+
+    @Test fun `the toggle never carries over to a podcast queue`() {
+        val episodes = listOf(track("e1").copy(isPodcast = true), track("e2").copy(isPodcast = true))
+        assertFalse(TwoTierQueue.effectiveShuffle(requested = false, shuffleOn = true, context = episodes))
+    }
+
+    @Test fun `carry-over needs a non-empty context`() {
+        assertFalse(TwoTierQueue.effectiveShuffle(requested = false, shuffleOn = true, context = emptyList()))
+    }
 }

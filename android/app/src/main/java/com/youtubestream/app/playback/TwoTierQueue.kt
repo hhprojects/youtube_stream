@@ -139,4 +139,11 @@ object TwoTierQueue {
         restored += remaining
         return TailPlan(tailStart, restored)
     }
+
+    /**
+     * Sticky-shuffle policy for a new queue: an explicit shuffle-play always wins; otherwise a lit
+     * toggle carries over to a music queue (podcasts always play in publication order).
+     */
+    fun effectiveShuffle(requested: Boolean, shuffleOn: Boolean, context: List<PlayableTrack>): Boolean =
+        requested || (shuffleOn && context.isNotEmpty() && context.none { it.isPodcast })
 }
