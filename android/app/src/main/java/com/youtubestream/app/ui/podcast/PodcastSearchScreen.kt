@@ -11,16 +11,20 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,20 +44,26 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.youtubestream.app.data.model.PodcastShowCard
+import com.youtubestream.app.data.model.SearchResult
 import com.youtubestream.app.ui.UiState
 import com.youtubestream.app.ui.appViewModel
+import com.youtubestream.app.ui.components.SongRow
+import com.youtubestream.app.ui.search.ItemDownload
 
-/** Focused full-screen podcast shows-search, launched from the Podcast tab's app-bar magnifier.
- *  Mirrors the music [com.youtubestream.app.ui.search.SearchScreen] shell; results are show cards
- *  that tap through to the existing ShowDetailScreen. No recents (kept separate from music recents). */
+/** Focused full-screen podcast search, launched from the Podcast tab's app-bar magnifier. Two
+ *  independent sections: podcast-filtered Shows (tap → ShowDetailScreen) and unfiltered YouTube
+ *  Videos (tap → audio-only episode download, grouped under the channel). */
 @Composable
 fun PodcastSearchScreen(
     onBack: () -> Unit,
     onShowClick: (showId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val vm = appViewModel { PodcastSearchViewModel(it.podcastRepository) }
-    val state by vm.state.collectAsStateWithLifecycle()
+    val vm = appViewModel { PodcastSearchViewModel(it.podcastRepository, it.searchRepository::search, it.podcastDownloads) }
+    val shows by vm.shows.collectAsStateWithLifecycle()
+    val videos by vm.videos.collectAsStateWithLifecycle()
+    val downloadedIds by vm.downloadedVideoIds.collectAsStateWithLifecycle()
+    val videoDownloads by vm.videoDownloads.collectAsStateWithLifecycle()
 
     var query by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
@@ -77,7 +87,7 @@ fun PodcastSearchScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Search shows") },
+                label = { Text("Search shows & videos") },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -89,25 +99,125 @@ fun PodcastSearchScreen(
             }
         }
 
-        Box(Modifier.fillMaxSize().padding(top = 12.dp), contentAlignment = Alignment.Center) {
-            when (val s = state) {
-                is UiState.Idle -> Text("Search for a show")
-                is UiState.Loading -> CircularProgressIndicator()
-                is UiState.Error -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Error: ${s.message}")
-                    Button(onClick = { vm.search(query) }) { Text("Retry") }
-                }
-                is UiState.Content -> if (s.data.isEmpty()) {
-                    Text("No shows found")
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(s.data, key = { it.showId }) { show ->
-                            ShowResultRow(show = show, onClick = { onShowClick(show.showId) })
-                        }
-                    }
-                }
+        // Page-level states: prompt before the first search; one "No results" when BOTH sections
+        // came back empty (per the spec) — otherwise the two sections render independently.
+        val bothEmpty = (shows as? UiState.Content)?.data?.isEmpty() == true &&
+            (videos as? UiState.Content)?.data?.isEmpty() == true
+        if (shows is UiState.Idle && videos is UiState.Idle) {
+            Box(Modifier.fillMaxSize().padding(top = 12.dp), contentAlignment = Alignment.Center) {
+                Text("Search for shows & videos")
+            }
+        } else if (bothEmpty) {
+            Box(Modifier.fillMaxSize().padding(top = 12.dp), contentAlignment = Alignment.Center) {
+                Text("No results")
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize().padding(top = 12.dp),
+            ) {
+                sectionHeader("Shows")
+                showsSection(shows, onShowClick, onRetry = { vm.search(query) })
+                sectionHeader("Videos")
+                videosSection(
+                    state = videos,
+                    downloadedIds = downloadedIds,
+                    downloads = videoDownloads,
+                    onVideoTap = vm::onVideoTap,
+                    onRetry = { vm.search(query) },
+                )
             }
         }
+    }
+}
+
+private fun LazyListScope.sectionHeader(label: String) {
+    item(key = "header:$label") {
+        Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+private fun LazyListScope.showsSection(
+    state: UiState<List<PodcastShowCard>>,
+    onShowClick: (String) -> Unit,
+    onRetry: () -> Unit,
+) {
+    when (state) {
+        is UiState.Idle -> Unit
+        is UiState.Loading -> item(key = "shows:loading") { SectionLoading() }
+        is UiState.Error -> item(key = "shows:error") { SectionError(state.message, onRetry) }
+        is UiState.Content -> if (state.data.isEmpty()) {
+            item(key = "shows:empty") { Text("No shows found") }
+        } else {
+            items(state.data, key = { "show:${it.showId}" }) { show ->
+                ShowResultRow(show = show, onClick = { onShowClick(show.showId) })
+            }
+        }
+    }
+}
+
+private fun LazyListScope.videosSection(
+    state: UiState<List<SearchResult>>,
+    downloadedIds: Set<String>,
+    downloads: Map<String, ItemDownload>,
+    onVideoTap: (SearchResult) -> Unit,
+    onRetry: () -> Unit,
+) {
+    when (state) {
+        is UiState.Idle -> Unit
+        is UiState.Loading -> item(key = "videos:loading") { SectionLoading() }
+        is UiState.Error -> item(key = "videos:error") { SectionError(state.message, onRetry) }
+        is UiState.Content -> if (state.data.isEmpty()) {
+            item(key = "videos:empty") { Text("No videos found") }
+        } else {
+            items(state.data, key = { "video:${it.id}" }) { video ->
+                val downloaded = video.id in downloadedIds
+                SongRow(
+                    title = video.title,
+                    artist = listOfNotNull(
+                        video.channel.takeIf { it.isNotBlank() },
+                        video.durationSeconds?.let(::formatEpisodeDuration),
+                    ).joinToString(" • "),
+                    artworkUrl = video.thumbnailUrl,
+                    onClick = { if (!downloaded) onVideoTap(video) },
+                    trailing = {
+                        when (downloads[video.id]) {
+                            is ItemDownload.Queued, is ItemDownload.Downloading ->
+                                CircularProgressIndicator(Modifier.size(24.dp))
+                            is ItemDownload.Failed -> IconButton(onClick = { onVideoTap(video) }) {
+                                Icon(Icons.Filled.Download, contentDescription = "Retry download")
+                            }
+                            else -> if (downloaded) {
+                                Icon(
+                                    Icons.Filled.DownloadDone,
+                                    contentDescription = "Downloaded",
+                                    modifier = Modifier.padding(12.dp),
+                                )
+                            } else {
+                                IconButton(onClick = { onVideoTap(video) }) {
+                                    Icon(Icons.Filled.Download, contentDescription = "Download as episode")
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLoading() {
+    Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun SectionError(message: String, onRetry: () -> Unit) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Error: $message")
+        Button(onClick = onRetry) { Text("Retry") }
     }
 }
 
