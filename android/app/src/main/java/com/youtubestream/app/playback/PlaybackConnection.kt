@@ -222,9 +222,16 @@ class PlaybackConnection(
 
     override fun setQueueAndPlay(tracks: List<PlayableTrack>, startIndex: Int, startPositionMs: Long, shuffled: Boolean) {
         val c = controller ?: return
-        val plan = TwoTierQueue.buildSetQueue(entries, c.currentMediaItemIndex, tracks, startIndex, shuffled, random)
+        // Sticky shuffle: a lit toggle survives a new music queue (the tapped track plays first);
+        // an explicit shuffle-play keeps its random start; podcasts always rebuild natural order.
+        val effective = TwoTierQueue.effectiveShuffle(shuffled, shuffleOn, tracks)
+        val plan = if (effective && !shuffled) {
+            TwoTierQueue.buildSetQueueKeepStart(entries, c.currentMediaItemIndex, tracks, startIndex, random)
+        } else {
+            TwoTierQueue.buildSetQueue(entries, c.currentMediaItemIndex, tracks, startIndex, effective, random)
+        }
         entries = plan.entries
-        shuffleOn = shuffled
+        shuffleOn = effective
         originalOrder = plan.originalOrder
         // Media3 applies the start position atomically at prepare — no post-prepare seek race.
         c.setMediaItems(plan.entries.map { it.track.toMediaItem() }, plan.startIndex, startPositionMs)

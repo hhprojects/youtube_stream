@@ -11,8 +11,10 @@ interface PlaybackController {
     val state: StateFlow<PlayerUiState>
     /**
      * Replace the playing context. A still-pending manual queue survives — it is re-inserted right
-     * after the new start item (Spotify semantics). [shuffled] = shuffle-play: random start track,
-     * the rest permuted, the shuffle toggle lit (un-shuffle restores the canonical order).
+     * after the new start item (Spotify semantics). [shuffled] = explicit shuffle-play: random start
+     * track, the rest permuted, the toggle lit. Shuffle is otherwise sticky for music: a lit toggle
+     * carries over to the new queue (the [startIndex] track plays first, the rest permuted). Podcast
+     * queues always build in natural order and turn the toggle off.
      */
     fun setQueueAndPlay(
         tracks: List<PlayableTrack>,
