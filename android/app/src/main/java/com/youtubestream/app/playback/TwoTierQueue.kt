@@ -69,14 +69,7 @@ object TwoTierQueue {
         val pending = oldEntries.drop(oldCurrentIndex + 1).takeWhile { it.isManual }
         if (context.isEmpty()) return SetQueuePlan(pending, 0, emptyList())
         return if (shuffled) {
-            val start = random.nextInt(context.size)
-            val rest = (context.take(start) + context.drop(start + 1)).shuffled(random)
-            SetQueuePlan(
-                entries = listOf(QueueEntry(context[start], isManual = false)) + pending +
-                    rest.map { QueueEntry(it, isManual = false) },
-                startIndex = 0,
-                originalOrder = context.map { it.mediaId },
-            )
+            shuffledPlan(context, random.nextInt(context.size), pending, random)
         } else {
             val at = startIndex.coerceIn(0, context.lastIndex)
             SetQueuePlan(
@@ -86,6 +79,39 @@ object TwoTierQueue {
                 originalOrder = emptyList(),
             )
         }
+    }
+
+    /**
+     * Sticky-shuffle rebuild: the tapped track ([startIndex]) plays first, the pending manual block
+     * follows, and the rest of the context is permuted behind it. [SetQueuePlan.originalOrder] keeps
+     * the context's natural ids so toggling shuffle off restores natural order.
+     */
+    fun buildSetQueueKeepStart(
+        oldEntries: List<QueueEntry>,
+        oldCurrentIndex: Int,
+        context: List<PlayableTrack>,
+        startIndex: Int,
+        random: Random,
+    ): SetQueuePlan {
+        val pending = oldEntries.drop(oldCurrentIndex + 1).takeWhile { it.isManual }
+        if (context.isEmpty()) return SetQueuePlan(pending, 0, emptyList())
+        return shuffledPlan(context, startIndex.coerceIn(0, context.lastIndex), pending, random)
+    }
+
+    /** Shuffled rebuild pinned at [at]: that track first, the block, then the rest permuted. */
+    private fun shuffledPlan(
+        context: List<PlayableTrack>,
+        at: Int,
+        pending: List<QueueEntry>,
+        random: Random,
+    ): SetQueuePlan {
+        val rest = (context.take(at) + context.drop(at + 1)).shuffled(random)
+        return SetQueuePlan(
+            entries = listOf(QueueEntry(context[at], isManual = false)) + pending +
+                rest.map { QueueEntry(it, isManual = false) },
+            startIndex = 0,
+            originalOrder = context.map { it.mediaId },
+        )
     }
 
     /**

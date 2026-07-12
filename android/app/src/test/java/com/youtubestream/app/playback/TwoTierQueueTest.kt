@@ -130,6 +130,37 @@ class TwoTierQueueTest {
         assertEquals(0, plan.startIndex)
     }
 
+    // --- buildSetQueueKeepStart: sticky shuffle keeps the tapped song first ---
+
+    @Test fun `keep-start pins the tapped track first with the block next and the rest permuted`() {
+        val old = listOf(ctx("a"), man("q1"))
+        val context = listOf(track("n1"), track("n2"), track("n3"), track("n4"))
+        val plan = TwoTierQueue.buildSetQueueKeepStart(old, 0, context, startIndex = 2, random = kotlin.random.Random(7))
+        assertEquals("n3", plan.entries[0].track.mediaId)   // the tapped track plays first
+        assertEquals(0, plan.startIndex)
+        assertEquals("q1", plan.entries[1].track.mediaId)   // pending block right after the start item
+        assertTrue(plan.entries[1].isManual)
+        assertEquals(
+            setOf("n1", "n2", "n4"),                        // rest = permutation of the remainder
+            plan.entries.drop(2).map { it.track.mediaId }.toSet(),
+        )
+        assertEquals(listOf("n1", "n2", "n3", "n4"), plan.originalOrder)  // natural order kept for un-shuffle
+    }
+
+    @Test fun `keep-start coerces an out-of-range start index`() {
+        val plan = TwoTierQueue.buildSetQueueKeepStart(
+            emptyList(), 0, listOf(track("a"), track("b")), startIndex = 9, random = kotlin.random.Random(1),
+        )
+        assertEquals("b", plan.entries[0].track.mediaId)
+    }
+
+    @Test fun `keep-start with an empty context keeps only the pending block`() {
+        val plan = TwoTierQueue.buildSetQueueKeepStart(listOf(ctx("a"), man("q1")), 0, emptyList(), 0, kotlin.random.Random(1))
+        assertEquals(listOf("q1"), plan.entries.map { it.track.mediaId })
+        assertEquals(0, plan.startIndex)
+        assertEquals(emptyList<String>(), plan.originalOrder)
+    }
+
     // --- jumpPlan: tapping an up-next row pulls the queue block along (Spotify) ---
 
     @Test fun `jump to a context item pulls the block along`() {
